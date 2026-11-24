@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+debug.log
+*.log
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.old
+*.orig
+*.swp
+/uploads/*
+!/uploads/.htaccess
+/cache/*
+!/cache/.gitkeep

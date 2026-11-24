@@ -6,6 +6,10 @@
 - PHP 8+ with PDO MySQL, cURL, Fileinfo, and the extensions used by the site enabled.
 - MySQL/MariaDB. Use a dedicated database account with access only to this site's database.
 
+## Coolify / Docker deployment
+
+This repository includes a `Dockerfile` that installs the PHP extensions required by the app, including `pdo_mysql`. For a Coolify Git application, set the build strategy to **Dockerfile**, Dockerfile path to `/Dockerfile`, base directory to `/`, and exposed port to `80`. Add the database and app environment variables to the PHP application resource, then redeploy. The MySQL service's internal hostname and credentials belong in the PHP app's environment; do not use `localhost` when MySQL runs in another container.
+
 ## Configuration
 
 Set these variables in the PHP-FPM pool or the web service environment (do not put them in a public `.env` file):
