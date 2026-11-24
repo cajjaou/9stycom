@@ -159,7 +159,12 @@ function installer_validate_upload(): array
     if ($sql === false || trim($sql) === '') {
         throw new RuntimeException('The SQL backup is empty or unreadable.');
     }
-    return [$sql, basename($file['name'])];
+    // The source backup uses a MariaDB UCA-14 collation; MySQL uses UCA-9 names.
+    $collationConversions = substr_count(strtolower($sql), 'utf8mb4_uca1400_ai_ci');
+    if ($collationConversions > 0) {
+        $sql = str_ireplace('utf8mb4_uca1400_ai_ci', 'utf8mb4_0900_ai_ci', $sql);
+    }
+    return [$sql, basename($file['name']), $collationConversions];
 }
 
 $error = '';
@@ -183,7 +188,7 @@ try {
             throw new RuntimeException('The full restore has already completed. Disable and remove the installer.');
         }
 
-        [$sql, $filename] = installer_validate_upload();
+        [$sql, $filename, $collationConversions] = installer_validate_upload();
         $mode = (string) ($_POST['mode'] ?? '');
 
         if ($mode === 'repair') {
@@ -204,6 +209,7 @@ try {
             $result = $created
                 ? 'Added missing tables: ' . implode(', ', $created) . '. No rows were imported.'
                 : 'No missing tables were found. No rows were imported.';
+            if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'RESTORE') {
             $statementNumber = 0;
             $db->query('SET FOREIGN_KEY_CHECKS=0');
@@ -218,6 +224,7 @@ try {
             installer_mark_complete($db);
             $completed = true;
             $result = 'Backup ' . $filename . ' imported successfully into database ' . DB_NAME . '. Disable the installer now.';
+            if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
             throw new RuntimeException('Choose a valid action. Full restore requires typing RESTORE.');
         }
