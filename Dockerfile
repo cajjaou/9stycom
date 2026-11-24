@@ -10,8 +10,8 @@ RUN apt-get update \
     && chown -R www-data:www-data /var/www/html/cache /var/www/html/uploads
 
 RUN printf '%s\n' \
-    'upload_max_filesize=64M' \
-    'post_max_size=70M' \
+    'upload_max_filesize=100M' \
+    'post_max_size=110M' \
     'max_execution_time=600' \
     'memory_limit=512M' \
     > /usr/local/etc/php/conf.d/zz-site.ini

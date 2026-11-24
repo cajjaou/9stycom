@@ -31,8 +31,8 @@ $_SESSION['installer_csrf'] ??= bin2hex(random_bytes(32));
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 set_time_limit(600);
-ini_set('upload_max_filesize', '64M');
-ini_set('post_max_size', '70M');
+ini_set('upload_max_filesize', '100M');
+ini_set('post_max_size', '110M');
 
 function installer_db(): mysqli
 {
@@ -149,8 +149,8 @@ function installer_validate_upload(): array
         throw new RuntimeException('Choose a valid SQL backup file.');
     }
     $file = $_FILES['backup'];
-    if (!is_uploaded_file($file['tmp_name']) || (int) $file['size'] < 1 || (int) $file['size'] > 64 * 1024 * 1024) {
-        throw new RuntimeException('The uploaded file is invalid or exceeds the 64 MB limit.');
+    if (!is_uploaded_file($file['tmp_name']) || (int) $file['size'] < 1 || (int) $file['size'] > 100 * 1024 * 1024) {
+        throw new RuntimeException('The uploaded file is invalid or exceeds the 100 MB limit.');
     }
     if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'sql') {
         throw new RuntimeException('Upload a plain .sql file.');
@@ -290,7 +290,7 @@ try {
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
       <label for="token">Installer token</label>
       <input id="token" type="password" name="installer_token" required autocomplete="off">
-      <label for="backup">SQL backup (.sql, maximum 64 MB)</label>
+      <label for="backup">SQL backup (.sql, maximum 100 MB)</label>
       <input id="backup" type="file" name="backup" accept=".sql,application/sql" required>
       <section>
         <h2>Repair missing tables</h2>
