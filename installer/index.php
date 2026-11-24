@@ -223,6 +223,11 @@ try {
                 throw new RuntimeException('The uploaded backup contains no CREATE TABLE statements. Nothing was deleted.');
             }
 
+            // A reverse proxy may time out before a large restore finishes.
+            // Let PHP complete the import even if the browser connection closes.
+            ignore_user_abort(true);
+            set_time_limit(600);
+
             $statementNumber = 0;
             $db->query('SET FOREIGN_KEY_CHECKS=0');
 
