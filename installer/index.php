@@ -228,7 +228,6 @@ try {
             ignore_user_abort(true);
             set_time_limit(600);
 
-            $statementNumber = 0;
             $db->query('SET FOREIGN_KEY_CHECKS=0');
 
             // Empty only DB_NAME: leave MySQL system databases and other schemas untouched.
@@ -242,13 +241,12 @@ try {
             foreach ($views as $identifier) $db->query('DROP VIEW IF EXISTS ' . $identifier);
             foreach ($tables as $identifier) $db->query('DROP TABLE IF EXISTS ' . $identifier);
 
-            foreach (installer_sql_statements($sql) as $statement) {
-                $statementNumber++;
-                $db->multi_query($statement);
-                do {
-                    if ($res = $db->store_result()) $res->free();
-                } while ($db->more_results() && $db->next_result());
-            }
+            // Send the original dump as one MySQL multi-statement request so
+            // the server, not a PHP splitter, handles quoted SQL and comments.
+            $db->multi_query($sql);
+            do {
+                if ($res = $db->store_result()) $res->free();
+            } while ($db->more_results() && $db->next_result());
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             installer_mark_complete($db);
             $completed = true;
