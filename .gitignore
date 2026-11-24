@@ -1,0 +1,26 @@
+# Runtime files and secrets
+.env
+.env.*
+!.env.example
+debug.log
+*.log
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.old
+*.orig
+*.swp
+
+# User uploaded content and generated product cache stay on the server
+/uploads/*
+!/uploads/.htaccess
+/cache/*
+!/cache/.gitkeep
+
+# Local/editor/OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

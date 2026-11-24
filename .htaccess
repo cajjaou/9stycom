@@ -1,0 +1,50 @@
+RewriteEngine On
+RewriteBase /
+
+# Block private runtime directories and server-side uploads before static-file passthrough.
+RewriteRule ^(?:cache|\.git|\.aws|\.codex|\.agents)(?:/|$) - [F,L,NC]
+RewriteRule ^uploads/.*\.(?:php[0-9]?|phtml|phar|cgi|pl|py|sh)(?:$|/) - [F,L,NC]
+
+# Redirect old /post/slug to /slug (301 Permanent Redirect with No-Escape for Arabic URLs)
+RewriteRule ^post/([^/]+)/?$ /$1 [R=301,NE,L]
+
+# Sitemap XML redirection
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+# Redirect short links /s/code to share.php?c=code
+RewriteRule ^s/([^/]+)/?$ share.php?c=$1 [L,QSA]
+
+# Clean promo links (e.g., /go/JBpidXXXXX)
+RewriteRule ^go/JBpid([a-zA-Z0-9_-]+)/?$ go/promo.php?hash=$1 [L,QSA]
+
+
+# Options bach tban rassail errors chwia (khtiyari, testih)
+# Options -MultiViews
+
+# Ila l fichier wla dossier li tlab l'user kayn b7alo (css, js, images,
+# go/promo.php, banners-api.php, robots.txt...) khaliه ymchi mabashra,
+# matmchich l router.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Homepage
+RewriteRule ^$ index.php [L]
+
+# Pagination dyal category: 9sty.com/slug/page/2
+RewriteRule ^([^/]+)/page/([0-9]+)/?$ index.php?slug=$1&page=$2 [L,QSA]
+
+# Kolchi akhor (slug wa7ed, bla / f nafs l ism) -> router.
+# Router (index.php) howa li ghadi y9arar wach slug howa dyal post
+# wla dyal category (chouf index.php).
+RewriteRule ^([^/]+)/?$ index.php?slug=$1 [L,QSA]
+
+# --- Sécurité: 7jeb l access mbacher l fichiers sensibles ---
+<FilesMatch "^db\.php$">
+    Require all denied
+</FilesMatch>
+
+# Keep deployment secrets, logs, and hidden files out of HTTP.
+<FilesMatch "^(\.env|\.htaccess|debug\.log|.*\.(log|sql|bak|old|orig|swp))$">
+    Require all denied
+</FilesMatch>

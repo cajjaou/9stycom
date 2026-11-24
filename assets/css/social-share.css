@@ -1,0 +1,71 @@
+/* ---------- Hespress Social Share Styling ---------- */
+.box_social {
+    margin: 24px 0;
+    display: flex;
+    justify-content: flex-start;
+}
+.box_social .btn-group {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--white);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.box_social .share-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 40px;
+    border: none;
+    border-left: 1px solid var(--line);
+    color: var(--ink-soft) !important;
+    background: var(--white);
+    transition: background 0.2s ease, color 0.2s ease, transform 0.1s ease;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+}
+/* Remove border on the last button (since we are RTL, the last button is on the far left, and we use border-left!) */
+.box_social .share-btn:last-child {
+    border-left: none;
+}
+.box_social .share-btn .sm-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+}
+.box_social .share-btn svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+.box_social .share-btn.facebook:hover { background: #1877F2 !important; color: #fff !important; }
+.box_social .share-btn.twitter:hover { background: #000000 !important; color: #fff !important; }
+.box_social .share-btn.linkedin:hover { background: #0077b5 !important; color: #fff !important; }
+.box_social .share-btn.telegram:hover { background: #0088cc !important; color: #fff !important; }
+.box_social .share-btn.whatsapp:hover { background: #25D366 !important; color: #fff !important; }
+.box_social .share-btn.link:hover { background: var(--accent) !important; color: var(--btn-text) !important; }
+.box_social .share-btn.print:hover { background: var(--line) !important; color: var(--ink) !important; }
+
+/* Active click effect */
+.box_social .share-btn:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 640px) {
+    .box_social {
+        margin: 16px 0;
+    }
+    .box_social .share-btn {
+        width: 38px;
+        height: 36px;
+    }
+    .box_social .share-btn .sm-icon {
+        width: 15px;
+        height: 15px;
+    }
+}

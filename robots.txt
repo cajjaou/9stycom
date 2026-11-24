@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+
+Sitemap: https://9sty.com/sitemap.xml
