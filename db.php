@@ -14,6 +14,10 @@ define('DB_USER', getenv('DB_USER') ?: '');
 define('DB_PASS', getenv('DB_PASS') ?: '');
 define('DB_PORT', getenv('DB_PORT') ?: '3306');
 define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
+define('CDN_BASE_URL', rtrim(getenv('CDN_BASE_URL') ?: 'https://cdn.9sty.com', '/'));
+define('IMAGE_BASE_URL', CDN_BASE_URL . '/uploads/');
+define('FALLBACK_IMAGE', IMAGE_BASE_URL . 'no-images-news.webp');
+define('UPLOAD_DIR', rtrim(getenv('UPLOAD_DIR') ?: (__DIR__ . '/uploads'), '/\\'));
 
 function get_db(): PDO
 {
@@ -124,7 +128,7 @@ function get_db(): PDO
                 
                 // Seed a placeholder custom banner
                 $stmt = $pdo->prepare("INSERT INTO 9s_custom_banners (name, image, url, price, promo_price, is_active) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->execute(['JanaBio Gold Honey', 'https://cdn.9sty.com/uploads/no-images-news.webp', 'https://digitalbyanas.com', '199', '299', 0]);
+                $stmt->execute(['JanaBio Gold Honey', FALLBACK_IMAGE, 'https://digitalbyanas.com', '199', '299', 0]);
             } catch (PDOException $ex) {
                 // Ignore or log error
             }
@@ -385,9 +389,6 @@ src="https://www.facebook.net/tr?id=' . $fbEsc . '&ev=PageView&noscript=1"
  * (mtl "1780260271_363f3c6d.jpg"), machi URL kamla. Bdel hadi b l'path
  * l7a9i9i fin mkhznin les images f server dyalek.
  */
-define('IMAGE_BASE_URL', 'https://cdn.9sty.com/uploads/');
-define('FALLBACK_IMAGE', 'https://cdn.9sty.com/uploads/no-images-news.webp');
-
 /**
  * news_categories ma fihach 3mod dyal loun (color). Bach kol category
  * ykhrj biha loun tabet w mayet bddelch f kol load, kanjeneriw loun

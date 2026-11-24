@@ -311,9 +311,12 @@ function handle_image_upload($file_key)
     }
 
     $filename = time() . '_' . substr(md5(uniqid()), 0, 8) . '.' . $ext;
-    $target_dir = __DIR__ . '/../cdn/uploads/';
-    if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0755, true);
+    $target_dir = rtrim(UPLOAD_DIR, '/\\') . DIRECTORY_SEPARATOR;
+    if (!is_dir($target_dir) && !@mkdir($target_dir, 0755, true) && !is_dir($target_dir)) {
+        throw new Exception('مجلد رفع الصور غير موجود أو ما عندوش صلاحية الكتابة.');
+    }
+    if (!is_writable($target_dir)) {
+        throw new Exception('مجلد رفع الصور ما عندوش صلاحية الكتابة.');
     }
 
     if (move_uploaded_file($file['tmp_name'], $target_dir . $filename)) {
@@ -331,7 +334,7 @@ function handle_image_from_url($url): ?string
     }
 
     // If already on our CDN / uploads folder, just return the filename
-    $cdnPrefix = 'https://cdn.9sty.com/uploads/';
+    $cdnPrefix = IMAGE_BASE_URL;
     if (strpos($url, $cdnPrefix) === 0) {
         $basename = basename(parse_url($url, PHP_URL_PATH));
         if (!empty($basename)) {
@@ -339,10 +342,11 @@ function handle_image_from_url($url): ?string
         }
     }
 
-    $target_dir = __DIR__ . '/../cdn/uploads/';
-    if (!is_dir($target_dir)) {
-        mkdir($target_dir, 0755, true);
+    $target_dir = rtrim(UPLOAD_DIR, '/\\') . DIRECTORY_SEPARATOR;
+    if (!is_dir($target_dir) && !@mkdir($target_dir, 0755, true) && !is_dir($target_dir)) {
+        return null;
     }
+    if (!is_writable($target_dir)) return null;
 
     $data = null;
     $mimeType = null;
@@ -384,28 +388,12 @@ function handle_image_from_url($url): ?string
         }
     }
 
-    // Detect extension from MIME type or path
-    $ext = 'jpg';
-    if (!empty($mimeType)) {
-        $mime = strtolower(trim(explode(';', $mimeType)[0]));
-        $mimeMap = [
-            'image/jpeg' => 'jpg',
-            'image/jpg' => 'jpg',
-            'image/png' => 'png',
-            'image/webp' => 'webp',
-            'image/gif' => 'gif',
-            'image/svg+xml' => 'svg'
-        ];
-        if (isset($mimeMap[$mime])) {
-            $ext = $mimeMap[$mime];
-        }
-    } else {
-        $pathExt = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
-        $allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
-        if (in_array($pathExt, $allowed, true)) {
-            $ext = ($pathExt === 'jpeg') ? 'jpg' : $pathExt;
-        }
-    }
+    $imageInfo = @getimagesizefromstring($data);
+    if (!$imageInfo || empty($imageInfo['mime'])) return null;
+    $mimeMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/gif' => 'gif'];
+    $mime = strtolower($imageInfo['mime']);
+    if (!isset($mimeMap[$mime])) return null;
+    $ext = $mimeMap[$mime];
 
     $filename = time() . '_' . substr(md5(uniqid()), 0, 8) . '.' . $ext;
     if (file_put_contents($target_dir . $filename, $data) !== false) {
@@ -2532,7 +2520,7 @@ try {
                 try {
                     $logo_filename = handle_image_upload('site_logo_file');
                     if ($logo_filename) {
-                        save_setting('site_logo', 'https://cdn.9sty.com/uploads/' . $logo_filename);
+                        save_setting('site_logo', IMAGE_BASE_URL . $logo_filename);
                     }
                 } catch (Exception $ex) {
                     echo json_encode(['success' => false, 'message' => 'خطأ في رفع الشعار: ' . $ex->getMessage()]);
@@ -2545,7 +2533,7 @@ try {
                 try {
                     $seo_filename = handle_image_upload('default_seo_image_file');
                     if ($seo_filename) {
-                        save_setting('default_seo_image', 'https://cdn.9sty.com/uploads/' . $seo_filename);
+                        save_setting('default_seo_image', IMAGE_BASE_URL . $seo_filename);
                     }
                 } catch (Exception $ex) {
                     echo json_encode(['success' => false, 'message' => 'خطأ في رفع صورة المشاركة الافتراضية: ' . $ex->getMessage()]);
@@ -2816,7 +2804,7 @@ case 'delete_forever':
             $st->execute([$id]);
             $img = $st->fetchColumn();
             if ($img && strpos($img, 'http') !== 0) {
-                $file = __DIR__ . '/../cdn/uploads/' . basename($img);
+                $file = rtrim(UPLOAD_DIR, '/\\') . DIRECTORY_SEPARATOR . basename($img);
                 if (is_file($file)) @unlink($file);
             }
         }
