@@ -12,8 +12,12 @@ set_exception_handler(function(Throwable $e) {
     $timestamp = date('Y-m-d H:i:s');
     $msg = "[$timestamp] [Exception] " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine() . PHP_EOL;
     error_log($msg);
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'حدث خطأ في الخادم. يرجى المحاولة لاحقاً.']);
+    if (function_exists('app_exception_response')) {
+        app_exception_response($e, 'حدث خطأ في الخادم. يرجى المحاولة لاحقاً.');
+    } else {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'حدث خطأ في الخادم. يرجى المحاولة لاحقاً.']);
+    }
     exit;
 });
 

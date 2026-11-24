@@ -11,7 +11,9 @@
 Set these variables in the PHP-FPM pool or the web service environment (do not put them in a public `.env` file):
 
 - `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- `DB_PORT` (optional; defaults to `3306`), `DB_CHARSET` (optional; defaults to `utf8mb4`)
 - `JANABIO_API_KEY`, `JANABIO_API_SECRET` (or configure the values in the existing admin settings)
+- `APP_DEBUG` (set to `1` only while the site is private for troubleshooting; remove or set to `0` before making it public)
 
 The database account needs schema changes while the current application performs automatic migrations at startup. For production hardening, run migrations deliberately and then remove DDL privileges from the runtime account.
 

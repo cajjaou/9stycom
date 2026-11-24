@@ -16,21 +16,35 @@ define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_NAME', getenv('DB_NAME') ?: '');
 define('DB_USER', getenv('DB_USER') ?: '');
 define('DB_PASS', getenv('DB_PASS') ?: '');
+define('DB_PORT', getenv('DB_PORT') ?: '3306');
 define('DB_CHARSET', getenv('DB_CHARSET') ?: 'utf8mb4');
 
 function get_db(): PDO
 {
     static $pdo = null;
     if ($pdo === null) {
-        if (DB_NAME === '' || DB_USER === '' || DB_PASS === '') {
-            throw new RuntimeException('Database configuration is missing. Set DB_NAME, DB_USER, and DB_PASS.');
+        $missing = [];
+        foreach (['DB_NAME', 'DB_USER', 'DB_PASS'] as $required) {
+            if (constant($required) === '') {
+                $missing[] = $required;
+            }
         }
-        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
-        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
+        if ($missing) {
+            throw new RuntimeException('Database configuration is missing: ' . implode(', ', $missing) . '.');
+        }
+        if (!ctype_digit((string) DB_PORT) || (int) DB_PORT < 1 || (int) DB_PORT > 65535) {
+            throw new RuntimeException('DB_PORT must be a valid TCP port number.');
+        }
+        $dsn = 'mysql:host=' . DB_HOST . ';port=' . DB_PORT . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
+        try {
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+        } catch (PDOException $e) {
+            throw new RuntimeException('MySQL connection failed: ' . $e->getMessage(), 0, $e);
+        }
 
         // Auto-migration: Ensure parent_id column exists in news_comments
         try {
