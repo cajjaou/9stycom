@@ -18,8 +18,13 @@ Set these variables in the PHP-FPM pool or the web service environment (do not p
 - `DB_PORT` (optional; defaults to `3306`), `DB_CHARSET` (optional; defaults to `utf8mb4`)
 - `JANABIO_API_KEY`, `JANABIO_API_SECRET` (or configure the values in the existing admin settings)
 - `APP_DEBUG` (set to `1` only while the site is private for troubleshooting; remove or set to `0` before making it public)
+- `INSTALLER_ENABLED=1` and `INSTALLER_TOKEN` (temporary only; required to use `/installer/`)
 
 The database account needs schema changes while the current application performs automatic migrations at startup. For production hardening, run migrations deliberately and then remove DDL privileges from the runtime account.
+
+## Temporary database installer
+
+Keep the domain private. Set `APP_DEBUG=1`, `INSTALLER_ENABLED=1`, and `INSTALLER_TOKEN` to a random value with at least 32 characters, then redeploy. Open `/installer/`, enter the token, and upload the SQL backup. **Create missing tables** imports schema only and preserves existing rows; **Import full backup** imports both schema and data and can replace tables with matching names. The full restore writes a completion marker and disables further installer actions. After success, set `INSTALLER_ENABLED=0` (or remove the token) and redeploy. The `.sql` backup is excluded from Git and Docker build context.
 
 ## Before opening the site
 
