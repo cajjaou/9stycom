@@ -210,9 +210,33 @@ try {
                 ? 'Added missing tables: ' . implode(', ', $created) . '. No rows were imported.'
                 : 'No missing tables were found. No rows were imported.';
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
-        } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'RESTORE') {
+        } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'EMPTY AND RESTORE') {
+            if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
+                throw new RuntimeException('Refusing to restore into a MySQL system database. Set DB_NAME to the application database.');
+            }
+
+            $createCount = 0;
+            foreach (installer_sql_statements($sql) as $statement) {
+                if (installer_table_ddl($statement) !== null) $createCount++;
+            }
+            if ($createCount === 0) {
+                throw new RuntimeException('The uploaded backup contains no CREATE TABLE statements. Nothing was deleted.');
+            }
+
             $statementNumber = 0;
             $db->query('SET FOREIGN_KEY_CHECKS=0');
+
+            // Empty only DB_NAME: leave MySQL system databases and other schemas untouched.
+            $views = [];
+            $tables = [];
+            foreach ($db->query('SHOW FULL TABLES')->fetch_all(MYSQLI_NUM) as $row) {
+                $identifier = '`' . str_replace('`', '``', (string) $row[0]) . '`';
+                if (strtoupper((string) ($row[1] ?? '')) === 'VIEW') $views[] = $identifier;
+                else $tables[] = $identifier;
+            }
+            foreach ($views as $identifier) $db->query('DROP VIEW IF EXISTS ' . $identifier);
+            foreach ($tables as $identifier) $db->query('DROP TABLE IF EXISTS ' . $identifier);
+
             foreach (installer_sql_statements($sql) as $statement) {
                 $statementNumber++;
                 $db->multi_query($statement);
@@ -226,7 +250,7 @@ try {
             $result = 'Backup ' . $filename . ' imported successfully into database ' . DB_NAME . '. Disable the installer now.';
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
-            throw new RuntimeException('Choose a valid action. Full restore requires typing RESTORE.');
+            throw new RuntimeException('Choose a valid action. Full restore requires typing EMPTY AND RESTORE.');
         }
     }
 } catch (Throwable $e) {
@@ -256,7 +280,7 @@ try {
 </head>
 <body>
   <h1>Private database installer</h1>
-  <p class="notice">Use only while the site is private. Take a database backup before a full restore. The full restore can replace existing tables and data.</p>
+  <p class="notice">Use only while the site is private. A full restore permanently drops every table and view in the configured application database, then imports the backup. Other databases, including MySQL system databases, are not touched. Take a backup first if any current data matters.</p>
   <?php if ($error !== ''): ?><p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
   <?php if ($result !== ''): ?><p class="success"><?= htmlspecialchars($result, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
   <?php if ($completed): ?>
@@ -275,8 +299,8 @@ try {
       </section>
       <section>
         <h2>Import the full backup</h2>
-        <p>Imports the SQL dump into the configured application database. This may replace tables with the same names.</p>
-        <label for="confirm">Type RESTORE to confirm</label>
+        <p>Empties the configured application database, then imports all tables and rows from the SQL dump.</p>
+        <label for="confirm">Type EMPTY AND RESTORE to confirm</label>
         <input id="confirm" name="confirm_restore" autocomplete="off">
         <button type="submit" name="mode" value="restore">Import full backup</button>
       </section>
