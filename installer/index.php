@@ -174,6 +174,74 @@ function installer_id_repair_message(array $result): string
     return $message;
 }
 
+function installer_repair_banner_slug(mysqli $db): string
+{
+    try {
+        $tableQuery = $db->prepare("
+            SELECT 1 FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '9s_custom_banners'
+            LIMIT 1
+        ");
+        $tableQuery->execute();
+        if (!$tableQuery->get_result()->fetch_row()) {
+            return ' Banner slug migration skipped: table 9s_custom_banners is absent.';
+        }
+
+        $columnQuery = $db->query("SHOW COLUMNS FROM `9s_custom_banners` LIKE 'slug'");
+        if (!$columnQuery->fetch_assoc()) {
+            $db->query("ALTER TABLE `9s_custom_banners` ADD COLUMN `slug` VARCHAR(32) NULL AFTER `id`");
+        }
+
+        $rows = $db->query("
+            SELECT id FROM `9s_custom_banners`
+            WHERE slug IS NULL OR slug = ''
+            ORDER BY id
+        ")->fetch_all(MYSQLI_ASSOC);
+        $check = $db->prepare("SELECT 1 FROM `9s_custom_banners` WHERE slug = ? LIMIT 1");
+        $update = $db->prepare("
+            UPDATE `9s_custom_banners`
+            SET slug = ?
+            WHERE id = ? AND (slug IS NULL OR slug = '')
+            LIMIT 1
+        ");
+        foreach ($rows as $row) {
+            $base = 'legacy-' . max(0, (int) $row['id']);
+            $slug = $base;
+            $suffix = 1;
+            do {
+                $check->bind_param('s', $slug);
+                $check->execute();
+                if (!$check->get_result()->fetch_row()) {
+                    break;
+                }
+                $slug = $base . '-' . $suffix++;
+            } while (true);
+
+            $bannerId = (int) $row['id'];
+            $update->bind_param('si', $slug, $bannerId);
+            $update->execute();
+        }
+
+        $db->query("ALTER TABLE `9s_custom_banners` MODIFY COLUMN `slug` VARCHAR(32) NOT NULL");
+        $indexes = $db->query("SHOW INDEX FROM `9s_custom_banners`")->fetch_all(MYSQLI_ASSOC);
+        $hasUniqueSlugIndex = false;
+        foreach ($indexes as $index) {
+            if ((string) $index['Column_name'] === 'slug' && (int) $index['Non_unique'] === 0) {
+                $hasUniqueSlugIndex = true;
+                break;
+            }
+        }
+        if (!$hasUniqueSlugIndex) {
+            $db->query("ALTER TABLE `9s_custom_banners` ADD UNIQUE KEY `uq_9s_custom_banners_slug` (`slug`)");
+        }
+
+        return ' Added/backfilled slug on 9s_custom_banners.';
+    } catch (Throwable $e) {
+        error_log('[installer-banner-migration] ' . $e->getMessage());
+        return ' Banner slug migration warning: ' . $e->getMessage();
+    }
+}
+
 /** Split a plain SQL dump on semicolons outside strings, identifiers, and comments. */
 function installer_sql_statements(string $sql): Generator
 {
@@ -324,10 +392,11 @@ try {
             }
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             $idRepair = installer_fix_auto_increment_ids($db);
+            $bannerSlugRepair = installer_repair_banner_slug($db);
             $result = $created
                 ? 'Added missing tables: ' . implode(', ', $created) . '. No rows were imported.'
                 : 'No missing tables were found. No rows were imported.';
-            $result .= installer_id_repair_message($idRepair);
+            $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'EMPTY AND RESTORE') {
             if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
@@ -367,11 +436,12 @@ try {
                 if ($res = $db->store_result()) $res->free();
             } while ($db->more_results() && $db->next_result());
             $idRepair = installer_fix_auto_increment_ids($db);
+            $bannerSlugRepair = installer_repair_banner_slug($db);
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             installer_mark_complete($db);
             $completed = true;
             $result = 'Backup ' . $filename . ' imported successfully into database ' . DB_NAME . '. Disable the installer now.';
-            $result .= installer_id_repair_message($idRepair);
+            $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
             throw new RuntimeException('Choose a valid action. Full restore requires typing EMPTY AND RESTORE.');
