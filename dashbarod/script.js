@@ -142,6 +142,7 @@ var SECTION_META = {
   comments: { title: 'التعليقات', subtitle: 'مراجعة تعليقات القراء' },
   users: { title: 'المستخدمون', subtitle: 'صلاحيات الوصول للوحة' },
   shortlinks: { title: 'الروابط المختصرة', subtitle: 'إدارة الروابط المخصصة' },
+  shares: { title: 'تتبع المشاركات (SI)', subtitle: 'عدد المشاركات والزيارات القادمة عبر كل رمز مشاركة' },
   settings: { title: 'إعدادات التتبع', subtitle: 'Analytics, Pixel & SEO' },
   trash: { title: 'سلة المهملات', subtitle: 'العناصر المحذوفة — استعادتها أو حذفها نهائياً' }
 
@@ -177,9 +178,82 @@ function loadSection(name) {
     case 'comments': renderComments(area); break;
     case 'users': renderUsers(area); break;
     case 'shortlinks': renderShortLinks(area); break;
+    case 'shares': renderShares(area); break;
     case 'settings': renderSettings(area); break;
     case 'trash': renderTrash(area); break;
   }
+}
+
+// ---------- Share Referrals (SI) ----------
+function renderShares(container, page = 1) {
+  container.innerHTML = `<div class="card"><div class="loader-shimmer" style="height:80px;"></div></div>`;
+  fetch(`api.php?action=list_shares&page=${page}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        container.innerHTML = `<div class="error-msg">${escapeHTML(data.message)}</div>`;
+        return;
+      }
+      var stats = data.stats || { total_shares: 0, total_visits: 0, active_sharers: 0, top_platform: '—' };
+      var rows = '';
+      (data.shares || []).forEach(s => {
+        var shareUrl = `https://9sty.com/s/${encodeURIComponent(s.short_code)}?si=${encodeURIComponent(s.si_code)}`;
+        rows += `
+          <tr>
+            <td style="font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHTML(s.post_title || s.short_code)}">${escapeHTML(s.post_title || ('/s/' + s.short_code))}</td>
+            <td><code style="background:var(--brand-50);color:var(--brand-600);padding:2px 8px;border-radius:6px;font-weight:700;">${escapeHTML(s.si_code)}</code></td>
+            <td><span class="badge active">${escapeHTML(s.platform || 'share')}</span></td>
+            <td style="font-weight:800;color:#2563eb;text-align:center;">${Number(s.visits || 0).toLocaleString('en')}</td>
+            <td style="direction:ltr;text-align:right;font-size:12px;"><a href="${shareUrl}" target="_blank" style="color:var(--brand-600);">/s/${escapeHTML(s.short_code)}?si=${escapeHTML(s.si_code)}</a></td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHTML((s.created_at || '').substring(0, 16))}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHTML((s.last_visit_at || '—').substring(0, 16))}</td>
+          </tr>`;
+      });
+
+      var pag = data.pagination || { page: 1, total_pages: 1 };
+      var pagHtml = '';
+      if (pag.total_pages > 1) {
+        pagHtml = `<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">`;
+        for (var p = 1; p <= pag.total_pages; p++) {
+          pagHtml += `<button class="btn ${p === pag.page ? '' : 'btn-secondary'}" style="padding:6px 12px;" onclick="renderShares(document.getElementById('main-content'), ${p})">${p}</button>`;
+        }
+        pagHtml += `</div>`;
+      }
+
+      container.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#ede9fe;color:#7c3aed;"><i data-lucide="share-2"></i></div>
+            <div class="stat-info"><span class="stat-label">إجمالي المشاركات</span><span class="stat-value">${(stats.total_shares || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#dbeafe;color:#2563eb;"><i data-lucide="mouse-pointer-click"></i></div>
+            <div class="stat-info"><span class="stat-label">الزيارات عبر المشاركة</span><span class="stat-value">${(stats.total_visits || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#ecfdf5;color:#059669;"><i data-lucide="users"></i></div>
+            <div class="stat-info"><span class="stat-label">مشاركون جلبوا زواراً</span><span class="stat-value">${(stats.active_sharers || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#fef3c7;color:#d97706;"><i data-lucide="award"></i></div>
+            <div class="stat-info"><span class="stat-label">أكثر منصة مشاركة</span><span class="stat-value" style="font-size:16px;">${escapeHTML(stats.top_platform || '—')}</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2>سجل روابط المشاركة (SI)</h2>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>المقال</th><th>كود SI</th><th>المنصة</th><th>الزوار</th><th>الرابط</th><th>تاريخ المشاركة</th><th>آخر زيارة</th></tr></thead>
+              <tbody>${rows || `<tr><td colspan="7"><div class="empty-state"><i data-lucide="inbox"></i><p>لا توجد مشاركات مسجلة بعد</p></div></td></tr>`}</tbody>
+            </table>
+          </div>
+          ${pagHtml}
+        </div>`;
+      refreshIcons();
+    })
+    .catch(() => { container.innerHTML = `<div class="error-msg">تعذّر الاتصال</div>`; });
 }
 
 // ---------- Overview ----------

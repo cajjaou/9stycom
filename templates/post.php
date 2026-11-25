@@ -135,42 +135,48 @@ require __DIR__ . '/header.php';
     <img class="art-cover" src="<?= htmlspecialchars(post_thumb($article['image'])) ?>" alt="<?= htmlspecialchars($article['title']) ?>" onerror="this.onerror=null; this.src='<?= FALLBACK_IMAGE ?>';">
 
     <?php 
-    $shortUrl = "https://9sty.com/s/" . $article['short_code'];
+    $siChars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $siCode = '';
+    for ($siIdx = 0; $siIdx < 7; $siIdx++) {
+        $siCode .= $siChars[random_int(0, 61)];
+    }
+    $baseShortUrl = "https://9sty.com/s/" . $article['short_code'];
+    $shortUrl = $baseShortUrl . (str_contains($baseShortUrl, '?') ? '&' : '?') . "si=" . $siCode;
     ?>
-    <div class="box_social">
+    <div class="box_social" data-post-id="<?= (int)$article['id'] ?>" data-short-code="<?= htmlspecialchars($article['short_code']) ?>" data-si-code="<?= htmlspecialchars($siCode) ?>" data-base-short-url="<?= htmlspecialchars($baseShortUrl) ?>">
       <div class="btn-group" role="group">
         
-        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn facebook" title="شارك على Facebook">
+        <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn facebook" data-platform="facebook" title="شارك على Facebook">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg>
           </span>
         </a>
 
-        <a href="https://twitter.com/intent/tweet?url=<?= urlencode($shortUrl) ?>&text=<?= urlencode($article['title']) ?>" rel="noopener nofollow" target="_blank" class="share-btn twitter" title="شارك على تويتر">
+        <a href="https://twitter.com/intent/tweet?url=<?= urlencode($shortUrl) ?>&text=<?= urlencode($article['title']) ?>" rel="noopener nofollow" target="_blank" class="share-btn twitter" data-platform="twitter" title="شارك على تويتر">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
           </span>
         </a>
 
-        <a href="https://www.linkedin.com/shareArticle?mini=true&amp;url=<?= urlencode($shortUrl) ?>&amp;title=<?= urlencode($article['title']) ?>" rel="noopener nofollow" target="_blank" class="share-btn linkedin" title="Share on Linkedin">
+        <a href="https://www.linkedin.com/shareArticle?mini=true&amp;url=<?= urlencode($shortUrl) ?>&amp;title=<?= urlencode($article['title']) ?>" rel="noopener nofollow" target="_blank" class="share-btn linkedin" data-platform="linkedin" title="Share on Linkedin">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>
           </span>
         </a>
 
-        <a href="https://telegram.me/share/url?text=<?= urlencode($article['title']) ?>&url=<?= urlencode($shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn telegram" title="Share on Telegram">
+        <a href="https://telegram.me/share/url?text=<?= urlencode($article['title']) ?>&url=<?= urlencode($shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn telegram" data-platform="telegram" title="Share on Telegram">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-1-.65-.35-1 .22-1.62.15-.16 2.72-2.5 2.77-2.71.01-.03.01-.13-.05-.18-.06-.05-.14-.03-.21-.02-.09.02-1.49.94-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.52 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .24z"/></svg>
           </span>
         </a>
 
-        <a href="https://api.whatsapp.com/send?text=<?= urlencode($article['title'] . ' ' . $shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn whatsapp" title="Share on Whatsapp">
+        <a href="https://api.whatsapp.com/send?text=<?= urlencode($article['title'] . ' ' . $shortUrl) ?>" rel="noopener nofollow" target="_blank" class="share-btn whatsapp" data-platform="whatsapp" title="Share on Whatsapp">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.455L0 24zm6.49-3.238c1.644.975 3.238 1.488 4.887 1.489 5.531 0 10.034-4.502 10.037-10.037.001-2.682-1.043-5.203-2.941-7.102C16.634 3.21 14.12 2.165 11.44 2.165c-5.54 0-10.046 4.503-10.049 10.04-.001 1.882.511 3.719 1.483 5.378L1.87 22.09l4.677-1.328z"/></svg>
           </span>
         </a>
       
-        <button onclick="copyShareLink('<?= $shortUrl ?>', this)" class="copy copyLink share-btn link" title="Copy link">
+        <button id="copy-share-btn" onclick="copyShareLink('<?= htmlspecialchars($shortUrl, ENT_QUOTES, 'UTF-8') ?>', this)" class="copy copyLink share-btn link" data-platform="copy" title="Copy link">
           <span class="sm-icon">
             <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
           </span>
@@ -184,6 +190,57 @@ require __DIR__ . '/header.php';
 
       </div>
     </div>
+    <script>
+    (function () {
+      var box = document.querySelector('.box_social[data-short-code]');
+      if (!box) return;
+      var postId = box.getAttribute('data-post-id');
+      var shortCode = box.getAttribute('data-short-code');
+      var baseUrl = box.getAttribute('data-base-short-url');
+      var siCode = box.getAttribute('data-si-code');
+      var storageKey = '9sty_si_' + shortCode;
+
+      try {
+        var saved = localStorage.getItem(storageKey);
+        if (saved && /^[A-Za-z0-9]{5,16}$/.test(saved)) {
+          var oldSi = siCode;
+          siCode = saved;
+          box.setAttribute('data-si-code', siCode);
+          box.querySelectorAll('a.share-btn[data-platform]').forEach(function (a) {
+            a.href = a.href.replace(encodeURIComponent('si=' + oldSi), encodeURIComponent('si=' + siCode));
+          });
+          var copyBtn = document.getElementById('copy-share-btn');
+          if (copyBtn) {
+            var newUrl = baseUrl + (baseUrl.indexOf('?') !== -1 ? '&' : '?') + 'si=' + siCode;
+            copyBtn.setAttribute('onclick', "copyShareLink('" + newUrl + "', this)");
+          }
+        } else {
+          localStorage.setItem(storageKey, siCode);
+        }
+      } catch (e) {}
+
+      box.querySelectorAll('.share-btn[data-platform]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var payload = JSON.stringify({
+            post_id: postId,
+            short_code: shortCode,
+            si_code: siCode,
+            platform: btn.getAttribute('data-platform') || 'share'
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/share-api.php', new Blob([payload], { type: 'application/json' }));
+          } else if (window.fetch) {
+            fetch('/share-api.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload,
+              keepalive: true
+            }).catch(function () {});
+          }
+        });
+      });
+    })();
+    </script>
 
     <div class="art-body">
       <?php foreach ($paragraphs as $i => $p):

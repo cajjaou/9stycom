@@ -258,6 +258,10 @@ $themeCssVars = function_exists('ja_theme_css_vars') ? ja_theme_css_vars() : [];
               <span class="nav-icon"><i data-lucide="link-2"></i></span>
               <span>الروابط المختصرة</span>
             </a>
+            <a class="nav-item" id="menu-shares" onclick="loadSection('shares')">
+              <span class="nav-icon"><i data-lucide="share-2"></i></span>
+              <span>تتبع المشاركات (SI)</span>
+            </a>
           </nav>
         </div>
         

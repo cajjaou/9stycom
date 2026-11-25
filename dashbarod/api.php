@@ -2661,6 +2661,64 @@ try {
             $stmt->execute([$id]);
             echo json_encode(['success' => true, 'message' => 'تم نقل الرابط إلى سلة المهملات.']);
             break;
+
+        // ================= SHARE REFERRAL (SI) TRACKING =================
+        case 'list_shares':
+            try {
+                $page = max(1, (int)($_GET['page'] ?? 1));
+                $per_page = 30;
+                $offset = ($page - 1) * $per_page;
+
+                $stats = [
+                    'total_shares' => 0,
+                    'total_visits' => 0,
+                    'active_sharers' => 0,
+                    'top_platform' => '—',
+                ];
+                $sRow = $pdo->query("
+                    SELECT COUNT(*) AS total_shares,
+                           COALESCE(SUM(visits), 0) AS total_visits,
+                           SUM(CASE WHEN visits > 0 THEN 1 ELSE 0 END) AS active_sharers
+                    FROM post_share_links
+                ")->fetch();
+                if ($sRow) {
+                    $stats['total_shares'] = (int)$sRow['total_shares'];
+                    $stats['total_visits'] = (int)$sRow['total_visits'];
+                    $stats['active_sharers'] = (int)$sRow['active_sharers'];
+                }
+                $topPlat = $pdo->query("
+                    SELECT COALESCE(NULLIF(platform, ''), 'share') AS p, COUNT(*) AS c
+                    FROM post_share_links GROUP BY p ORDER BY c DESC LIMIT 1
+                ")->fetch();
+                if ($topPlat) {
+                    $stats['top_platform'] = $topPlat['p'];
+                }
+
+                $total = $stats['total_shares'];
+                $total_pages = max(1, (int)ceil($total / $per_page));
+
+                $stmt = $pdo->prepare("
+                    SELECT s.id, s.post_id, s.short_code, s.si_code, s.platform, s.visits, s.created_at, s.last_visit_at,
+                           p.title AS post_title, p.slug AS post_slug
+                    FROM post_share_links s
+                    LEFT JOIN news_posts p ON p.id = s.post_id OR p.short_code = s.short_code
+                    ORDER BY s.visits DESC, s.created_at DESC
+                    LIMIT :lim OFFSET :off
+                ");
+                $stmt->bindValue(':lim', $per_page, PDO::PARAM_INT);
+                $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+
+                echo json_encode([
+                    'success' => true,
+                    'stats' => $stats,
+                    'shares' => $stmt->fetchAll(),
+                    'pagination' => ['page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => $total_pages],
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => 'خطأ في تحميل بيانات المشاركات: ' . $e->getMessage()]);
+            }
+            break;
         // ================= COLOR SETTINGS =================
         case 'get_color_settings':
             echo json_encode([

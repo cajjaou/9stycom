@@ -3,6 +3,10 @@ require_once 'db.php';
 
 // التحقق من وجود short_code في الرابط
 $short_code = $_GET['c'] ?? '';
+$si_code = trim((string)($_GET['si'] ?? ''));
+if (!preg_match('/^[A-Za-z0-9]{5,16}$/', $si_code)) {
+    $si_code = '';
+}
 
 if (empty($short_code)) {
     header("Location: /");
@@ -70,13 +74,30 @@ if ($target_url) {
         }
     }
 
-    // 🔹 حفظ البيانات في جدول التتبع
+    // 🔹 حفظ البيانات في جدول التتبع + تحديث عداد المشاركات (si)
+    if ($si_code !== '') {
+        try {
+            $stmt_si_ins = $pdo->prepare("
+                INSERT IGNORE INTO post_share_links (post_id, short_code, si_code, platform, visits, last_visit_at)
+                VALUES (?, ?, ?, 'direct', 0, NOW())
+            ");
+            $stmt_si_ins->execute([$post_id, $short_code, $si_code]);
+
+            $stmt_si_upd = $pdo->prepare("
+                UPDATE post_share_links SET visits = visits + 1, last_visit_at = NOW() WHERE si_code = ?
+            ");
+            $stmt_si_upd->execute([$si_code]);
+        } catch (Exception $e) {
+            error_log('post_share_links update failed: ' . $e->getMessage());
+        }
+    }
+
     try {
         $stmt_track = $pdo->prepare("
-            INSERT INTO news_tracking (short_code, ip_address, user_agent, referer, country, city)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO news_tracking (short_code, si_code, ip_address, user_agent, referer, country, city)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
-        $stmt_track->execute([$short_code, $ip, $user_agent, $referer, $country, $city]);
+        $stmt_track->execute([$short_code, $si_code !== '' ? $si_code : null, $ip, $user_agent, $referer, $country, $city]);
     } catch (Exception $e) {
         // لا نوقف الزائر إذا فشل التتبع
         error_log('news_tracking insert failed: ' . $e->getMessage());

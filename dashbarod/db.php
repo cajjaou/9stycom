@@ -389,6 +389,38 @@ function slug_is_available(string $slug, string $excludeType = '', ?int $exclude
         } catch (PDOException $ex) {
         }
     }
+    // Auto-migration: Ensure post_share_links table & news_tracking.si_code exist
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `post_share_links` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `post_id` INT UNSIGNED DEFAULT NULL,
+              `short_code` VARCHAR(50) NOT NULL,
+              `si_code` VARCHAR(16) NOT NULL,
+              `platform` VARCHAR(32) DEFAULT NULL,
+              `visits` INT UNSIGNED NOT NULL DEFAULT 0,
+              `ip_hash` CHAR(64) DEFAULT NULL,
+              `user_agent` VARCHAR(500) DEFAULT NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `last_visit_at` TIMESTAMP NULL DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uq_post_share_si` (`si_code`),
+              KEY `idx_psl_short_code` (`short_code`),
+              KEY `idx_psl_post_id` (`post_id`),
+              KEY `idx_psl_created_at` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (PDOException $ex) {
+    }
+    try {
+        $pdo->query("SELECT si_code FROM news_tracking LIMIT 1");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE news_tracking ADD COLUMN si_code VARCHAR(16) NULL AFTER short_code");
+            $pdo->exec("ALTER TABLE news_tracking ADD INDEX idx_nt_si_code (si_code)");
+        } catch (PDOException $ex) {
+        }
+    }
     return true;
 }
 
