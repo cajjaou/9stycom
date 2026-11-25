@@ -60,6 +60,23 @@ foreach ($products as $p) {
     }
 }
 
+// Backwards compatibility for legacy cb_<id> custom banner links
+if (!$product && preg_match('/^cb_(\d+)$/', (string)$productId, $m)) {
+    try {
+        $pdo = get_db();
+        $bStmt = $pdo->prepare("SELECT id, slug, url FROM 9s_custom_banners WHERE id = ? AND deleted_at IS NULL LIMIT 1");
+        $bStmt->execute([(int)$m[1]]);
+        $banner = $bStmt->fetch();
+        if ($banner && !empty($banner['url'])) {
+            if (!empty($banner['slug'])) {
+                $productId = $banner['slug'];
+            }
+            $product = ['id' => $productId, 'url' => $banner['url']];
+        }
+    } catch (Exception $e) {
+    }
+}
+
 if (!$product) {
     http_response_code(404);
     die('Product not found.');

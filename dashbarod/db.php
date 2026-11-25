@@ -369,6 +369,16 @@ function slug_is_available(string $slug, string $excludeType = '', ?int $exclude
         $pdo->exec("ALTER TABLE 9s_custom_banners ADD UNIQUE INDEX idx_banner_slug (slug)");
     } catch (PDOException $ex) {
     }
+    // Migrate legacy cb_<id> clicks in jb_promo_clicks to each banner's slug
+    try {
+        $pdo->exec("
+            UPDATE jb_promo_clicks c
+            INNER JOIN 9s_custom_banners b ON c.product_id = CONCAT('cb_', b.id)
+            SET c.product_id = b.slug
+            WHERE b.slug IS NOT NULL AND b.slug != ''
+        ");
+    } catch (PDOException $ex) {
+    }
     // Auto-migration: Ensure deleted_at exists in news_posts
     try {
         $pdo->query("SELECT deleted_at FROM news_posts LIMIT 1");

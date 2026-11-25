@@ -71,14 +71,18 @@ function get_janabio_products(bool $inStockOnly = true): array
     // 3) Retrieve active custom banners from 9s_custom_banners
     try {
         $pdo = get_db();
-        $stmt = $pdo->query("SELECT id, name, image, url, price, promo_price FROM 9s_custom_banners WHERE is_active = 1");
+        $stmt = $pdo->query("SELECT id, slug, name, image, url, price, promo_price FROM 9s_custom_banners WHERE is_active = 1 AND deleted_at IS NULL");
         $customBanners = [];
         while ($row = $stmt->fetch()) {
             $hasPrice = (!empty($row['price']) && (float)$row['price'] > 0);
+            $img = trim((string)($row['image'] ?? ''));
+            if ($img !== '' && !preg_match('#^https?://#i', $img)) {
+                $img = IMAGE_BASE_URL . ltrim($img, '/');
+            }
             $customBanners[] = [
-                'id'          => 'cb_' . $row['id'], // Prefix to avoid collisions
+                'id'          => !empty($row['slug']) ? $row['slug'] : ('cb_' . $row['id']),
                 'name'        => $row['name'],
-                'image'       => $row['image'],
+                'image'       => $img,
                 'url'         => $row['url'],
                 'price'       => $hasPrice ? $row['price'] : null,
                 'promo_price' => $hasPrice ? $row['promo_price'] : null,

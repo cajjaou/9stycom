@@ -2140,11 +2140,11 @@ try {
 
         $stmt = $pdo->prepare("
             SELECT b.id, b.slug, b.name, b.image, b.url, b.price, b.promo_price, b.is_active, b.created_at,
-                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id = b.slug AND $botFilter) AS total_clicks,
-                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id = b.slug AND $botFilter AND c.clicked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS clicks_7d,
-                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id = b.slug AND $botFilter AND c.clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS clicks_30d,
-                (SELECT COUNT(DISTINCT ip_hash) FROM jb_promo_clicks c WHERE c.product_id = b.slug AND $botFilter) AS unique_ips,
-                (SELECT MAX(clicked_at) FROM jb_promo_clicks c WHERE c.product_id = b.slug AND $botFilter) AS last_click
+                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter) AS total_clicks,
+                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter AND c.clicked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS clicks_7d,
+                (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter AND c.clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS clicks_30d,
+                (SELECT COUNT(DISTINCT ip_hash) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter) AS unique_ips,
+                (SELECT MAX(clicked_at) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter) AS last_click
             FROM 9s_custom_banners b
             WHERE b.deleted_at IS NULL
             ORDER BY total_clicks DESC, b.id DESC
@@ -2156,20 +2156,26 @@ try {
 
         $banners = $stmt->fetchAll();
 
-        // إجمالي النقرات + إحصائيات عامة
+        // إجمالي النقرات + إحصائيات عامة للبنرات المخصصة
         $stats = ['total_clicks' => 0, 'total_unique_ips' => 0, 'top_banner' => '—'];
         try {
             $s = $pdo->query("
                 SELECT COUNT(*) AS total_clicks,
-                       COUNT(DISTINCT ip_hash) AS unique_ips
-                FROM jb_promo_clicks WHERE $botFilter
+                       COUNT(DISTINCT c.ip_hash) AS unique_ips
+                FROM jb_promo_clicks c
+                INNER JOIN 9s_custom_banners b
+                    ON b.deleted_at IS NULL AND c.product_id IN (b.slug, CONCAT('cb_', b.id))
+                WHERE (c.user_agent IS NULL OR c.user_agent NOT LIKE '%Mediapartners-Google%')
             ")->fetch();
             $stats['total_clicks'] = (int)($s['total_clicks'] ?? 0);
             $stats['total_unique_ips'] = (int)($s['unique_ips'] ?? 0);
             $top = $pdo->query("
-                SELECT COALESCE(NULLIF(product_id, ''), 'بدون معرّف') AS src, COUNT(*) AS c
-                FROM jb_promo_clicks WHERE $botFilter AND product_id IS NOT NULL AND product_id != ''
-                GROUP BY src ORDER BY c DESC LIMIT 1
+                SELECT b.name AS src, COUNT(*) AS c
+                FROM jb_promo_clicks c
+                INNER JOIN 9s_custom_banners b
+                    ON b.deleted_at IS NULL AND c.product_id IN (b.slug, CONCAT('cb_', b.id))
+                WHERE (c.user_agent IS NULL OR c.user_agent NOT LIKE '%Mediapartners-Google%')
+                GROUP BY b.id, b.name ORDER BY c DESC LIMIT 1
             ")->fetch();
             if ($top) $stats['top_banner'] = $top['src'];
         } catch (Exception $e) {}
@@ -2195,26 +2201,31 @@ try {
 
             $botFilter = "(user_agent IS NULL OR user_agent NOT LIKE '%Mediapartners-Google%')";
             try {
-                $cnt = $pdo->prepare("SELECT COUNT(*) FROM jb_promo_clicks WHERE product_id = ? AND $botFilter");
-                $cnt->execute([$slug]);
+                $bStmt = $pdo->prepare("SELECT id FROM 9s_custom_banners WHERE slug = ? LIMIT 1");
+                $bStmt->execute([$slug]);
+                $bRow = $bStmt->fetch();
+                $legacyId = $bRow ? ('cb_' . $bRow['id']) : $slug;
+
+                $cnt = $pdo->prepare("SELECT COUNT(*) FROM jb_promo_clicks WHERE product_id IN (?, ?) AND $botFilter");
+                $cnt->execute([$slug, $legacyId]);
                 $total = (int)$cnt->fetchColumn();
 
                 $stmt = $pdo->prepare("
                     SELECT id, page_url, device_type, ip_hash, referrer, clicked_at, post_id, user_agent
                     FROM jb_promo_clicks
-                    WHERE product_id = ? AND $botFilter
+                    WHERE product_id IN (?, ?) AND $botFilter
                     ORDER BY clicked_at DESC LIMIT $per_page OFFSET $offset
                 ");
-                $stmt->execute([$slug]);
+                $stmt->execute([$slug, $legacyId]);
                 $clicks = $stmt->fetchAll();
 
                 // إحصائيات
                 $s = $pdo->prepare("
                     SELECT COUNT(DISTINCT ip_hash) AS ips,
                         COUNT(DISTINCT DATE(clicked_at)) AS days
-                    FROM jb_promo_clicks WHERE product_id = ? AND $botFilter
+                    FROM jb_promo_clicks WHERE product_id IN (?, ?) AND $botFilter
                 ");
-                $s->execute([$slug]);
+                $s->execute([$slug, $legacyId]);
                 $summary = $s->fetch() ?: [];
 
                 echo json_encode([
