@@ -77,52 +77,16 @@ function get_news_tracking_date_col(PDO $pdo): string
     return $col;
 }
 
-// Helper: Detect whether ads_tracking or jb_promo_clicks table exists
-
+// Helper: Use jb_promo_clicks (the active click-tracking table)
 function get_ads_table(PDO $pdo): string
 {
-    static $tbl = null;
-    if ($tbl !== null)
-        return $tbl;
-
-    $candidates = ['jb_promo_clicks', 'ads_tracking'];
-    foreach ($candidates as $t) {
-        try {
-            $count = (int) $pdo->query("SELECT COUNT(*) FROM `$t`")->fetchColumn();
-            if ($count > 0) {
-                $tbl = $t;
-                return $tbl;
-            }
-        } catch (Exception $e) {
-            // table doesn't exist, try next
-        }
-    }
-    // fallback: any existing table
-    foreach ($candidates as $t) {
-        try {
-            $pdo->query("SELECT 1 FROM `$t` LIMIT 1");
-            $tbl = $t;
-            return $tbl;
-        } catch (Exception $e) {
-        }
-    }
-    $tbl = 'jb_promo_clicks';
-    return $tbl;
+    return 'jb_promo_clicks';
 }
 
-// Helper: Detect the ad source column ('ad_source' or 'product_id')
+// Helper: Use product_id column in jb_promo_clicks
 function get_ads_source_col(PDO $pdo, string $tbl): string
 {
-    static $col = null;
-    if ($col !== null)
-        return $col;
-    try {
-        $pdo->query("SELECT ad_source FROM `$tbl` LIMIT 1");
-        $col = 'ad_source';
-    } catch (Exception $e) {
-        $col = 'product_id';
-    }
-    return $col;
+    return 'product_id';
 }
 
 // Helper: Resolve analytics date ranges and previous comparison periods
@@ -2133,12 +2097,10 @@ try {
         $per_page = 50;
         $offset = ($page - 1) * $per_page;
 
-        $total = (int)$pdo->query("SELECT COUNT(*) FROM 9s_custom_banners WHERE deleted_at IS NULL")->fetchColumn();
-        $total_pages = max(1, (int)ceil($total / $per_page));
-
         $botFilter = "(user_agent IS NULL OR user_agent NOT LIKE '%Mediapartners-Google%')";
 
-        $stmt = $pdo->prepare("
+        // 1) Custom banners from 9s_custom_banners
+        $stmt = $pdo->query("
             SELECT b.id, b.slug, b.name, b.image, b.url, b.price, b.promo_price, b.is_active, b.created_at,
                 (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter) AS total_clicks,
                 (SELECT COUNT(*) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter AND c.clicked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS clicks_7d,
@@ -2147,42 +2109,100 @@ try {
                 (SELECT MAX(clicked_at) FROM jb_promo_clicks c WHERE c.product_id IN (b.slug, CONCAT('cb_', b.id)) AND $botFilter) AS last_click
             FROM 9s_custom_banners b
             WHERE b.deleted_at IS NULL
-            ORDER BY total_clicks DESC, b.id DESC
-            LIMIT :lim OFFSET :off
         ");
-        $stmt->bindValue(':lim', $per_page, PDO::PARAM_INT);
-        $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
-        $stmt->execute();
+        $banners = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $row['is_janabio'] = false;
+            $banners[] = $row;
+        }
 
-        $banners = $stmt->fetchAll();
+        // 2) JanaBio banners from janabio-products.php + aggregated jb_promo_clicks
+        require_once __DIR__ . '/../janabio-products.php';
+        $jbProducts = get_janabio_products(false);
+        $clickAgg = [];
+        try {
+            $aggStmt = $pdo->query("
+                SELECT product_id,
+                       COUNT(*) AS total_clicks,
+                       SUM(CASE WHEN clicked_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS clicks_7d,
+                       SUM(CASE WHEN clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS clicks_30d,
+                       COUNT(DISTINCT ip_hash) AS unique_ips,
+                       MAX(clicked_at) AS last_click
+                FROM jb_promo_clicks
+                WHERE $botFilter AND product_id IS NOT NULL AND product_id != ''
+                GROUP BY product_id
+            ");
+            foreach ($aggStmt->fetchAll() as $aggRow) {
+                $clickAgg[(string)$aggRow['product_id']] = $aggRow;
+            }
+        } catch (Exception $e) {}
 
-        // إجمالي النقرات + إحصائيات عامة للبنرات المخصصة
+        $nameMap = [];
+        foreach ($banners as $cb) {
+            $nameMap[(string)$cb['slug']] = $cb['name'];
+            $nameMap['cb_' . $cb['id']] = $cb['name'];
+        }
+
+        foreach ($jbProducts as $jp) {
+            if (!empty($jp['is_custom'])) continue;
+            $pid = (string)($jp['id'] ?? '');
+            if ($pid === '') continue;
+            $c = $clickAgg[$pid] ?? null;
+            $nameMap[$pid] = $jp['name'] ?? $pid;
+            $banners[] = [
+                'id' => $pid,
+                'slug' => $pid,
+                'name' => $jp['name'] ?? ('JanaBio #' . $pid),
+                'image' => $jp['image'] ?? '',
+                'url' => $jp['url'] ?? '',
+                'price' => $jp['price'] ?? null,
+                'promo_price' => $jp['promo_price'] ?? null,
+                'is_active' => !empty($jp['in_stock']) ? 1 : 0,
+                'created_at' => null,
+                'total_clicks' => (int)($c['total_clicks'] ?? 0),
+                'clicks_7d' => (int)($c['clicks_7d'] ?? 0),
+                'clicks_30d' => (int)($c['clicks_30d'] ?? 0),
+                'unique_ips' => (int)($c['unique_ips'] ?? 0),
+                'last_click' => $c['last_click'] ?? null,
+                'is_janabio' => true,
+            ];
+        }
+
+        usort($banners, function ($a, $b) {
+            $cmp = ((int)$b['total_clicks']) <=> ((int)$a['total_clicks']);
+            return $cmp !== 0 ? $cmp : strcmp((string)$b['id'], (string)$a['id']);
+        });
+
+        $total = count($banners);
+        $total_pages = max(1, (int)ceil($total / $per_page));
+        $pagedBanners = array_slice($banners, $offset, $per_page);
+
+        // إجمالي النقرات + إحصائيات عامة (المخصصة + JanaBio)
         $stats = ['total_clicks' => 0, 'total_unique_ips' => 0, 'top_banner' => '—'];
         try {
             $s = $pdo->query("
                 SELECT COUNT(*) AS total_clicks,
-                       COUNT(DISTINCT c.ip_hash) AS unique_ips
-                FROM jb_promo_clicks c
-                INNER JOIN 9s_custom_banners b
-                    ON b.deleted_at IS NULL AND c.product_id IN (b.slug, CONCAT('cb_', b.id))
-                WHERE (c.user_agent IS NULL OR c.user_agent NOT LIKE '%Mediapartners-Google%')
+                       COUNT(DISTINCT ip_hash) AS unique_ips
+                FROM jb_promo_clicks
+                WHERE $botFilter
             ")->fetch();
             $stats['total_clicks'] = (int)($s['total_clicks'] ?? 0);
             $stats['total_unique_ips'] = (int)($s['unique_ips'] ?? 0);
             $top = $pdo->query("
-                SELECT b.name AS src, COUNT(*) AS c
-                FROM jb_promo_clicks c
-                INNER JOIN 9s_custom_banners b
-                    ON b.deleted_at IS NULL AND c.product_id IN (b.slug, CONCAT('cb_', b.id))
-                WHERE (c.user_agent IS NULL OR c.user_agent NOT LIKE '%Mediapartners-Google%')
-                GROUP BY b.id, b.name ORDER BY c DESC LIMIT 1
+                SELECT product_id, COUNT(*) AS c
+                FROM jb_promo_clicks
+                WHERE $botFilter AND product_id IS NOT NULL AND product_id != ''
+                GROUP BY product_id ORDER BY c DESC LIMIT 1
             ")->fetch();
-            if ($top) $stats['top_banner'] = $top['src'];
+            if ($top) {
+                $topPid = (string)$top['product_id'];
+                $stats['top_banner'] = $nameMap[$topPid] ?? $topPid;
+            }
         } catch (Exception $e) {}
 
         echo json_encode([
             'success' => true,
-            'banners' => $banners,
+            'banners' => $pagedBanners,
             'stats' => $stats,
             'pagination' => ['page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => $total_pages],
         ]);

@@ -198,8 +198,6 @@ function get_db(): PDO
             ['news_tracking', 'idx_nt_created_at', 'created_at'],
             ['news_tracking', 'idx_nt_short_code', 'short_code'],
             ['jb_promo_clicks', 'idx_jbpc_clicked_at', 'clicked_at'],
-            ['ads_tracking', 'idx_at_clicked_at', 'clicked_at'],
-            ['ads_tracking', 'idx_at_source', 'ad_source'],
         ] as [$tableName, $indexName, $columnName]) {
             try {
                 $indexCheck = $pdo->prepare("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1");

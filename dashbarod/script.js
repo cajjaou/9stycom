@@ -3146,14 +3146,22 @@ function renderBanners(container) {
           : `<span style="font-size:11px;color:var(--text-faint);">—</span>`;
 
         var slugBadge = b.slug ? `<code style="font-size:10.5px;background:var(--surface-2);padding:2px 6px;border-radius:4px;color:var(--text-muted);direction:ltr;display:inline-block;">${escapeHTML(b.slug)}</code>` : '';
+        var typeBadge = b.is_janabio
+          ? `<span class="badge" style="background:#dbeafe;color:#1d4ed8;font-size:10px;margin-right:4px;">JanaBio</span>`
+          : `<span class="badge" style="background:#ede9fe;color:#6d28d9;font-size:10px;margin-right:4px;">مخصص</span>`;
+        var actionButtons = b.is_janabio
+          ? `<button class="act-btn" onclick="openBannerClicks('${escapeJS(b.slug)}', '${escapeJS(b.name)}')" title="تفاصيل النقرات"><i data-lucide="bar-chart-3"></i></button>`
+          : `<button class="act-btn" onclick="openBannerClicks('${escapeJS(b.slug)}', '${escapeJS(b.name)}')" title="تفاصيل النقرات"><i data-lucide="bar-chart-3"></i></button>
+             <button class="act-btn" onclick="editBannerModal(${b.id}, '${escapeJS(b.name)}', '${escapeJS(b.url)}', '${escapeJS(b.price || '')}', '${escapeJS(b.promo_price || '')}', ${b.is_active}, '${escapeJS(b.image)}')" title="تعديل"><i data-lucide="pencil"></i></button>
+             <button class="act-btn del" onclick="deleteBanner(${b.id})" title="حذف"><i data-lucide="trash-2"></i></button>`;
 
         rows += `
           <tr>
-            <td style="color:var(--text-muted);font-weight:600;">#${b.id}</td>
+            <td style="color:var(--text-muted);font-weight:600;">#${escapeHTML(String(b.id))}</td>
             <td>${imgTag}</td>
             <td>
               <div style="font-weight:700;">${escapeHTML(b.name)}</div>
-              ${slugBadge}
+              <div style="margin-top:3px;">${typeBadge} ${slugBadge}</div>
             </td>
             <td>${price}</td>
             <td style="text-align:center;">${clicksBadge}<div style="font-size:10px;color:var(--text-faint);margin-top:2px;">إجمالي</div></td>
@@ -3164,9 +3172,7 @@ function renderBanners(container) {
             <td><span class="badge ${b.is_active ? 'active' : 'inactive'}">${b.is_active ? 'نشط' : 'معطل'}</span></td>
             <td>
               <div class="table-actions">
-                <button class="act-btn" onclick="openBannerClicks('${escapeJS(b.slug)}', '${escapeJS(b.name)}')" title="تفاصيل النقرات"><i data-lucide="bar-chart-3"></i></button>
-                <button class="act-btn" onclick="editBannerModal(${b.id}, '${escapeJS(b.name)}', '${escapeJS(b.url)}', '${escapeJS(b.price || '')}', '${escapeJS(b.promo_price || '')}', ${b.is_active}, '${escapeJS(b.image)}')" title="تعديل"><i data-lucide="pencil"></i></button>
-                <button class="act-btn del" onclick="deleteBanner(${b.id})" title="حذف"><i data-lucide="trash-2"></i></button>
+                ${actionButtons}
               </div>
             </td>
           </tr>`;
