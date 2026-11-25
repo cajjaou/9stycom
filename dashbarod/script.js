@@ -3413,16 +3413,32 @@ function renderSettings(container) {
           </h3>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
             <div class="form-group">
-              <label>اسم الموقع</label>
+              <label>اسم الموقع (site_name)</label>
+              <input type="text" name="site_name" class="form-control" value="${escapeHTML(s.site_name || '')}" placeholder="9sty.com">
+            </div>
+            <div class="form-group">
+              <label>عنوان الموقع (site_title)</label>
               <input type="text" name="site_title" class="form-control" value="${escapeHTML(s.site_title || '')}" placeholder="أخبار المغرب">
             </div>
             <div class="form-group">
               <label>رابط الموقع</label>
               <input type="url" name="site_url" class="form-control" value="${escapeHTML(s.site_url || '')}" placeholder="https://9sty.com">
             </div>
+            <div class="form-group">
+              <label>البريد الإلكتروني للتواصل</label>
+              <input type="email" name="contact_email" class="form-control" value="${escapeHTML(s.contact_email || '')}" placeholder="contact@9sty.com">
+            </div>
             <div class="form-group" style="grid-column:1/-1;">
               <label>وصف الموقع (SEO)</label>
               <textarea name="site_description" class="form-control" rows="2">${escapeHTML(s.site_description || '')}</textarea>
+            </div>
+            <div class="form-group">
+              <label>الكلمات المفتاحية (Keywords)</label>
+              <input type="text" name="site_keywords" class="form-control" value="${escapeHTML(s.site_keywords || '')}">
+            </div>
+            <div class="form-group">
+              <label>الاستهداف / التخصص (Target)</label>
+              <input type="text" name="target" class="form-control" value="${escapeHTML(s.target || '')}">
             </div>
             <div class="form-group">
               <label>شعار الموقع (URL)</label>
@@ -3435,7 +3451,25 @@ function renderSettings(container) {
           </div>
 
           <h3 style="font-size:14px; font-weight:700; margin:24px 0 14px; color:var(--brand-600); display:flex; align-items:center; gap:8px;">
-            <i data-lucide="bar-chart-3"></i> أكواد التتبع
+            <i data-lucide="plug"></i> إعدادات JanaBio API
+          </h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>JanaBio API URL</label>
+              <input type="url" name="janabio_api_url" class="form-control" value="${escapeHTML(s.janabio_api_url || '')}" placeholder="https://janabio.com/team/api/products/read">
+            </div>
+            <div class="form-group">
+              <label>JanaBio API Key</label>
+              <input type="text" name="janabio_api_key" class="form-control" value="${escapeHTML(s.janabio_api_key || '')}">
+            </div>
+            <div class="form-group">
+              <label>JanaBio API Secret</label>
+              <input type="text" name="janabio_api_secret" class="form-control" value="${escapeHTML(s.janabio_api_secret || '')}">
+            </div>
+          </div>
+
+          <h3 style="font-size:14px; font-weight:700; margin:24px 0 14px; color:var(--brand-600); display:flex; align-items:center; gap:8px;">
+            <i data-lucide="bar-chart-3"></i> أكواد التتبع والإعلانات
           </h3>
           <div class="form-group">
             <label>📊 Google Analytics</label>
@@ -3444,6 +3478,10 @@ function renderSettings(container) {
           <div class="form-group">
             <label>🎯 Facebook Pixel</label>
             <input type="text" name="facebook_pixel_id" class="form-control" value="${escapeHTML(s.facebook_pixel_id || '')}" placeholder="1234567890">
+          </div>
+          <div class="form-group">
+            <label>كود AdSense العام (adsense_code)</label>
+            <textarea name="adsense_code" class="form-control" rows="2">${escapeHTML(s.adsense_code || '')}</textarea>
           </div>
 
           <h3 style="font-size:14px; font-weight:700; margin:24px 0 14px; color:var(--brand-600); display:flex; align-items:center; gap:8px;">

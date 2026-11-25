@@ -515,7 +515,7 @@ function get_all_settings(bool $force_refresh = false): array
         $cache = [];
         try {
             $pdo = get_db();
-            $stmt = $pdo->query("SELECT setting_key, setting_value FROM 9s_settings");
+            $stmt = $pdo->query("SELECT setting_key, setting_value FROM settings");
             while ($row = $stmt->fetch()) {
                 $cache[$row['setting_key']] = $row['setting_value'];
             }
@@ -536,13 +536,17 @@ function save_setting(string $key, $value): bool
 {
     try {
         $pdo = get_db();
-        $stmt = $pdo->prepare("
-            INSERT INTO 9s_settings (setting_key, setting_value)
-            VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
-        ");
-        $stmt->execute([$key, (string) $value]);
+        $chk = $pdo->prepare("SELECT id FROM settings WHERE setting_key = ? LIMIT 1");
+        $chk->execute([$key]);
+        if ($chk->fetch()) {
+            $pdo->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = ?")
+                ->execute([(string) $value, $key]);
+        } else {
+            $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)")
+                ->execute([$key, (string) $value]);
+        }
         get_all_settings(true);
+        ja_get_all_settings(true);
         return true;
     } catch (PDOException $e) {
         return false;
