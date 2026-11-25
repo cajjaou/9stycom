@@ -11,14 +11,14 @@ $stmt = $pdo->prepare("
     LEFT JOIN news_categories c ON c.id = p.category_id
     WHERE p.status = 'published' AND p.deleted_at IS NULL
     ORDER BY p.created_at DESC
-    LIMIT 24
+    LIMIT 27
 ");
 $stmt->execute();
 $posts = $stmt->fetchAll();
 
-$heroMain = $posts[0] ?? null;
-$heroSide = array_slice($posts, 1, 3);
-$feedPosts = array_slice($posts, 4);
+$heroSlides = array_slice($posts, 0, 4);
+$heroSide = array_slice($posts, 4, 3);
+$feedPosts = array_slice($posts, 7);
 
 $trending = $pdo->query("
     SELECT title, slug FROM news_posts
@@ -33,16 +33,29 @@ require __DIR__ . '/header.php';
 
   <main>
 
-    <!-- HERO -->
-    <?php if ($heroMain): ?>
+    <!-- HERO SLIDESHOW -->
+    <?php if (!empty($heroSlides)): ?>
     <div class="hero">
-      <a href="/<?= htmlspecialchars($heroMain['slug']) ?>" class="hero-main">
-        <img src="<?= htmlspecialchars(post_thumb($heroMain['image'])) ?>" alt="<?= htmlspecialchars($heroMain['title']) ?>" onerror="this.onerror=null; this.src='<?= FALLBACK_IMAGE ?>';">
-        <div class="cap">
-          <span class="cat" style="background:<?= category_color((int)$heroMain['category_id']) ?>"><?= htmlspecialchars($heroMain['category_name'] ?? 'عام') ?></span>
-          <h2><?= htmlspecialchars($heroMain['title']) ?></h2>
-        </div>
-      </a>
+      <div class="hero-slider" id="hero-slider">
+        <?php foreach ($heroSlides as $idx => $slide): ?>
+          <a href="/<?= htmlspecialchars($slide['slug']) ?>" class="hero-slide <?= $idx === 0 ? 'active' : '' ?>">
+            <img src="<?= htmlspecialchars(post_thumb($slide['image'])) ?>" alt="<?= htmlspecialchars($slide['title']) ?>" onerror="this.onerror=null; this.src='<?= FALLBACK_IMAGE ?>';">
+            <div class="cap">
+              <span class="cat" style="background:<?= category_color((int)$slide['category_id']) ?>"><?= htmlspecialchars($slide['category_name'] ?? 'عام') ?></span>
+              <h2><?= htmlspecialchars($slide['title']) ?></h2>
+            </div>
+          </a>
+        <?php endforeach; ?>
+        <?php if (count($heroSlides) > 1): ?>
+          <button type="button" class="hero-nav-btn prev" id="hero-prev" aria-label="السابق"><i data-lucide="chevron-right"></i></button>
+          <button type="button" class="hero-nav-btn next" id="hero-next" aria-label="التالي"><i data-lucide="chevron-left"></i></button>
+          <div class="hero-dots" id="hero-dots">
+            <?php foreach ($heroSlides as $idx => $_): ?>
+              <button type="button" class="hero-dot <?= $idx === 0 ? 'active' : '' ?>" data-slide="<?= $idx ?>" aria-label="شريحة <?= $idx + 1 ?>"></button>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </div>
       <div class="hero-side">
         <?php foreach ($heroSide as $p): ?>
           <a href="/<?= htmlspecialchars($p['slug']) ?>" class="item">
@@ -77,7 +90,7 @@ require __DIR__ . '/header.php';
           <div class="post-body">
             <h3><?= htmlspecialchars($p['title']) ?></h3>
             <div class="post-meta">
-              <span class="comments">💬 <?= (int)$p['comments_count'] ?> تعليق</span>
+              <span class="comments"><i data-lucide="message-circle"></i> <?= (int)$p['comments_count'] ?> تعليق</span>
               <span><?= time_ago($p['created_at']) ?></span>
               <?php if (!empty($p['short_code'])): ?>
                 <span class="short-code-tag" style="font-family:monospace; font-size:11px; background:rgba(0,0,0,0.05); padding:1px 5px; border-radius:3px; color:var(--ink-soft);">#<?= htmlspecialchars($p['short_code']) ?></span>
@@ -100,7 +113,7 @@ require __DIR__ . '/header.php';
     <?= render_adsense('sidebar_top') ?>
 
     <div class="sidebar-block">
-      <p class="sidebar-title">🔥 الأكثر قراءة</p>
+      <p class="sidebar-title"><i data-lucide="flame"></i> الأكثر قراءة</p>
       <?php foreach ($trending as $i => $t): ?>
         <div class="trend-item">
           <span class="trend-num"><?= $i + 1 ?></span>
@@ -110,7 +123,7 @@ require __DIR__ . '/header.php';
     </div>
 
     <div class="sidebar-block">
-      <p class="sidebar-title">🌿 عروض JanaBio</p>
+      <p class="sidebar-title"><i data-lucide="sparkles"></i> عروض JanaBio</p>
       <div id="jb-sidebar-promos">
         <?php for ($i = 0; $i < 3; $i++): ?>
           <div class="sb-promo jb-slot" data-jb-sidebar-slot="<?= $i ?>"><div class="jb-skeleton" style="width:64px;height:64px;border-radius:4px;flex-shrink:0;"></div></div>
@@ -123,13 +136,55 @@ require __DIR__ . '/header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Hero slideshow
+    var slider = document.getElementById('hero-slider');
+    if (slider) {
+        var slides = slider.querySelectorAll('.hero-slide');
+        var dots = slider.querySelectorAll('.hero-dot');
+        var currentSlide = 0;
+        var slideTimer = null;
+
+        function goToSlide(idx) {
+            if (!slides.length) return;
+            slides[currentSlide].classList.remove('active');
+            if (dots[currentSlide]) dots[currentSlide].classList.remove('active');
+            currentSlide = (idx + slides.length) % slides.length;
+            slides[currentSlide].classList.add('active');
+            if (dots[currentSlide]) dots[currentSlide].classList.add('active');
+        }
+
+        function startAutoSlide() {
+            if (slides.length <= 1) return;
+            stopAutoSlide();
+            slideTimer = setInterval(function () { goToSlide(currentSlide + 1); }, 5000);
+        }
+
+        function stopAutoSlide() {
+            if (slideTimer) { clearInterval(slideTimer); slideTimer = null; }
+        }
+
+        var prevBtn = document.getElementById('hero-prev');
+        var nextBtn = document.getElementById('hero-next');
+        if (prevBtn) prevBtn.addEventListener('click', function () { goToSlide(currentSlide - 1); startAutoSlide(); });
+        if (nextBtn) nextBtn.addEventListener('click', function () { goToSlide(currentSlide + 1); startAutoSlide(); });
+        dots.forEach(function (dot) {
+            dot.addEventListener('click', function () {
+                goToSlide(parseInt(dot.getAttribute('data-slide'), 10) || 0);
+                startAutoSlide();
+            });
+        });
+        slider.addEventListener('mouseenter', stopAutoSlide);
+        slider.addEventListener('mouseleave', startAutoSlide);
+        startAutoSlide();
+    }
+
     var feedContainer = document.querySelector('.feed');
     var sentinel = document.getElementById('feed-sentinel');
     var loader = document.getElementById('feed-loader');
     
     if (!feedContainer || !sentinel) return;
     
-    var offset = 24; // 1 main hero + 3 side hero + 20 feed posts
+    var offset = 27; // 4 hero slides + 3 side hero + 20 feed posts
     var slotNum = <?= $slotNum + 1 ?>; // Get next slot number from PHP
     var isLoading = false;
     var hasMore = true;
@@ -161,6 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 if (data.html) {
                     feedContainer.insertAdjacentHTML('beforeend', data.html);
+                    if (window.refreshIcons) window.refreshIcons();
                     
                     // Automatically fill the new banner slots
                     if (window.fillFeedSlots && window.jbProducts) {

@@ -54,7 +54,7 @@ require __DIR__ . '/header.php';
           <div class="post-body">
             <h3><?= htmlspecialchars($p['title']) ?></h3>
             <div class="post-meta">
-              <span class="comments">💬 <?= (int)$p['comments_count'] ?> تعليق</span>
+              <span class="comments"><i data-lucide="message-circle"></i> <?= (int)$p['comments_count'] ?> تعليق</span>
               <span><?= time_ago($p['created_at']) ?></span>
               <?php if (!empty($p['short_code'])): ?>
                 <span class="short-code-tag" style="font-family:monospace; font-size:11px; background:rgba(0,0,0,0.05); padding:1px 5px; border-radius:3px; color:var(--ink-soft);">#<?= htmlspecialchars($p['short_code']) ?></span>
@@ -87,7 +87,7 @@ require __DIR__ . '/header.php';
   <aside>
     <?= render_adsense('sidebar_top') ?>
     <div class="sidebar-block">
-      <p class="sidebar-title">🔥 الأكثر قراءة</p>
+      <p class="sidebar-title"><i data-lucide="flame"></i> الأكثر قراءة</p>
       <?php foreach ($trending as $i => $t): ?>
         <div class="trend-item">
           <span class="trend-num"><?= $i + 1 ?></span>

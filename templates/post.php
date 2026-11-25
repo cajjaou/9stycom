@@ -122,11 +122,11 @@ require __DIR__ . '/header.php';
     <span class="cat" style="background:<?= category_color((int)$article['category_id']) ?>"><?= htmlspecialchars($article['category_name'] ?? 'عام') ?></span>
     <h1 class="art-title"><?= htmlspecialchars($article['title']) ?></h1>
     <div class="art-meta">
-      <span>📅 <?= time_ago($article['created_at']) ?></span>
-      <span>👁️ <?= number_format($article['views']) ?> مشاهدة</span>
-      <span>💬 <?= $commentsCount ?> تعليق</span>
+      <span><i data-lucide="calendar"></i> <?= time_ago($article['created_at']) ?></span>
+      <span><i data-lucide="eye"></i> <?= number_format($article['views']) ?> مشاهدة</span>
+      <span><i data-lucide="message-circle"></i> <?= $commentsCount ?> تعليق</span>
       <?php if (!empty($article['short_code'])): ?>
-        <span class="art-shortcode" style="font-family:monospace; font-size:12px; font-weight:700; background:rgba(0,0,0,0.06); padding:2px 8px; border-radius:4px; color:var(--ink); letter-spacing:0.5px;">🏷️ <?= htmlspecialchars($article['short_code']) ?></span>
+        <span class="art-shortcode" style="font-family:monospace; font-size:12px; font-weight:700; background:rgba(0,0,0,0.06); padding:2px 8px; border-radius:4px; color:var(--ink); letter-spacing:0.5px; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="tag"></i> <?= htmlspecialchars($article['short_code']) ?></span>
       <?php endif; ?>
     </div>
 
@@ -599,6 +599,9 @@ require __DIR__ . '/header.php';
                           if (window.fillInlineSlots && window.jbProducts) {
                               window.fillInlineSlots(window.jbProducts);
                           }
+                          if (window.refreshIcons) {
+                              window.refreshIcons();
+                          }
                           
                           // Auto-initialize Google AdSense & custom script elements inside the loaded post
                           newPostWrapper.querySelectorAll('script').forEach(function(oldScript) {
@@ -654,7 +657,7 @@ require __DIR__ . '/header.php';
   <aside>
     <?= render_adsense('sidebar_top') ?>
     <div class="sidebar-block">
-      <p class="sidebar-title">🔥 الأكثر قراءة</p>
+      <p class="sidebar-title"><i data-lucide="flame"></i> الأكثر قراءة</p>
       <?php foreach ($trending as $i => $t): ?>
         <div class="trend-item">
           <span class="trend-num"><?= $i + 1 ?></span>

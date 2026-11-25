@@ -41,6 +41,9 @@ if (!empty($ads)) {
 </script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= htmlspecialchars($adClient) ?>" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.400.0/dist/umd/lucide.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <link rel="stylesheet" href="/assets/css/social-share.css">
 <?= render_tracking_codes() ?>
@@ -107,8 +110,11 @@ if (!empty($ads)) {
   }
 
   *{box-sizing:border-box;}
-  body{margin:0;font-family:'Cairo',sans-serif;background:var(--paper);color:var(--ink);line-height:1.7;}
+  body{margin:0;font-family:'Cairo','Outfit',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.7;}
   a{color:inherit;text-decoration:none;}
+  .lucide{width:14px;height:14px;vertical-align:-2px;flex-shrink:0;}
+  .sidebar-title,.art-meta span,.post-meta .comments{display:inline-flex;align-items:center;gap:6px;}
+  .sidebar-title{display:flex;align-items:center;gap:7px;}
 
   /* ---------- Top bar ---------- */
   .topbar{background:var(--topbar-bg);color:var(--topbar-text);font-size:12px;padding:6px 20px;display:flex;justify-content:space-between;align-items:center;}
@@ -220,14 +226,23 @@ if (!empty($ads)) {
   .wrap{max-width:1180px;margin:24px auto;padding:0 20px;display:grid;grid-template-columns:1fr 320px;gap:28px;}
   @media (max-width:860px){.wrap{grid-template-columns:1fr;}}
 
-  /* ---------- Hero ---------- */
+  /* ---------- Hero & Slideshow ---------- */
   .hero{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;margin-bottom:30px;align-items:stretch;}
   @media (max-width:720px){.hero{grid-template-columns:1fr;}}
-  .hero-main{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/10;display:block;box-shadow:0 8px 24px rgba(0,0,0,.08);}
-  .hero-main img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease;}
-  .hero-main:hover img{transform:scale(1.03);}
-  .hero-main .cap{position:absolute;inset:auto 0 0 0;background:linear-gradient(transparent, rgba(0,0,0,.88) 65%);padding:72px 20px 18px;}
-  .hero-main .cap h2{color:#fff;font-size:21px;font-weight:800;margin:0;line-height:1.5;}
+  .hero-slider{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:16/10;background:#0f172a;box-shadow:0 8px 24px rgba(0,0,0,.08);}
+  .hero-slide{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .45s ease;display:block;}
+  .hero-slide.active{opacity:1;pointer-events:auto;z-index:2;}
+  .hero-slide img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .45s ease;}
+  .hero-slide:hover img{transform:scale(1.03);}
+  .hero-slide .cap{position:absolute;inset:auto 0 0 0;background:linear-gradient(transparent, rgba(0,0,0,.88) 65%);padding:72px 20px 36px;}
+  .hero-slide .cap h2{color:#fff;font-size:21px;font-weight:800;margin:0;line-height:1.5;}
+  .hero-nav-btn{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:34px;height:34px;border-radius:50%;border:none;background:rgba(15,23,42,.62);color:#fff;cursor:pointer;display:grid;place-items:center;transition:background .15s ease;}
+  .hero-nav-btn:hover{background:rgba(15,23,42,.88);}
+  .hero-nav-btn.prev{right:12px;}
+  .hero-nav-btn.next{left:12px;}
+  .hero-dots{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:6px;}
+  .hero-dot{width:8px;height:8px;border-radius:999px;border:none;background:rgba(255,255,255,.45);cursor:pointer;padding:0;transition:width .2s ease, background .2s ease;}
+  .hero-dot.active{width:22px;background:#fff;}
   .hero-side{display:flex;flex-direction:column;justify-content:space-between;gap:12px;}
   .hero-side .item{display:flex;gap:12px;align-items:center;background:var(--white);border:1px solid var(--line);border-radius:10px;padding:10px;transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease;}
   .hero-side .item:hover{box-shadow:0 6px 16px rgba(0,0,0,.07);transform:translateY(-2px);border-color:var(--accent);}
@@ -389,7 +404,24 @@ function copyShareLink(link, btn) {
         }, 1500);
     });
 }
+window.refreshIcons = function () {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+};
+window.addEventListener('load', function () {
+    if (!window.lucide) {
+        var s = document.createElement('script');
+        s.src = 'https://unpkg.com/lucide@0.400.0/dist/umd/lucide.min.js';
+        s.async = true;
+        s.onload = window.refreshIcons;
+        document.head.appendChild(s);
+    } else {
+        window.refreshIcons();
+    }
+});
 document.addEventListener('DOMContentLoaded', function () {
+    window.refreshIcons();
     var themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) {
         var iconEl = document.getElementById('theme-toggle-icon');
@@ -398,12 +430,13 @@ document.addEventListener('DOMContentLoaded', function () {
         function updateToggleUI() {
             var isDark = document.documentElement.classList.contains('dark-mode');
             if (isDark) {
-                iconEl.textContent = '☀️';
+                iconEl.innerHTML = '<i data-lucide="sun"></i>';
                 textEl.textContent = 'الوضع الفاتح';
             } else {
-                iconEl.textContent = '🌙';
+                iconEl.innerHTML = '<i data-lucide="moon"></i>';
                 textEl.textContent = 'الوضع الداكن';
             }
+            window.refreshIcons();
         }
         
         updateToggleUI();
@@ -425,8 +458,22 @@ document.addEventListener('DOMContentLoaded', function () {
 </head>
 <body<?= isset($bodyPostId) ? ' data-post-id="' . (int)$bodyPostId . '"' : '' ?>>
 
+<?php
+$tzNow = new DateTimeImmutable('now', new DateTimeZone('Africa/Casablanca'));
+$arDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+$arMonths = [1 => 'يناير', 2 => 'فبراير', 3 => 'مارس', 4 => 'أبريل', 5 => 'ماي', 6 => 'يونيو', 7 => 'يوليوز', 8 => 'غشت', 9 => 'شتنبر', 10 => 'أكتوبر', 11 => 'نونبر', 12 => 'دجنبر'];
+$todayArabic = $arDays[(int)$tzNow->format('w')] . ' ' . $tzNow->format('j') . ' ' . $arMonths[(int)$tzNow->format('n')] . ' ' . $tzNow->format('Y');
+
+$lastUpdatedText = 'الآن';
+try {
+    $latestCreated = $pdo->query("SELECT created_at FROM news_posts WHERE status = 'published' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1")->fetchColumn();
+    if ($latestCreated) {
+        $lastUpdatedText = time_ago($latestCreated);
+    }
+} catch (Exception $e) {}
+?>
 <div class="topbar">
-  <span>الأربعاء 12 غشت 2026 — الدار البيضاء ٢٨°</span>
+  <span style="display:inline-flex;align-items:center;gap:6px;"><i data-lucide="calendar"></i> <?= htmlspecialchars($todayArabic) ?> — المغرب</span>
   <div style="display:flex; align-items:center; gap:18px;">
     <?php 
     $fb = trim(get_setting('social_facebook', ''));
@@ -472,8 +519,8 @@ document.addEventListener('DOMContentLoaded', function () {
         <?php endif; ?>
       </div>
     <?php endif; ?>
-    <button id="theme-toggle" style="background:none; border:none; color:inherit; cursor:pointer; font-family:'Cairo',sans-serif; font-size:12px; display:flex; align-items:center; gap:6px; padding:0; outline:none;">
-        <span id="theme-toggle-icon">🌙</span> <span id="theme-toggle-text">الوضع الداكن</span>
+    <button id="theme-toggle" style="background:none; border:none; color:inherit; cursor:pointer; font-family:inherit; font-size:12px; display:flex; align-items:center; gap:6px; padding:0; outline:none;">
+        <span id="theme-toggle-icon" style="display:inline-flex;align-items:center;"><i data-lucide="moon"></i></span> <span id="theme-toggle-text">الوضع الداكن</span>
     </button>
   </div>
 </div>
@@ -483,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function () {
     <a href="/" class="logo-img-wrapper">
       <img class="header-logo" src="https://cdn.9sty.com/uploads/logo_akhbaralmghrib.svg" alt="أخبار المغرب">
     </a>
-    <div class="date-line">آخر تحديث: قبل 4 دقائق</div>
+    <div class="date-line" style="display:inline-flex;align-items:center;gap:5px;"><i data-lucide="clock"></i> آخر تحديث: <?= htmlspecialchars($lastUpdatedText) ?></div>
   </div>
   <nav>
     <a href="/">الرئيسية</a>
