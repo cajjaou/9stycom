@@ -5,9 +5,7 @@ RUN apt-get update \
     && docker-php-ext-install -j"$(nproc)" curl fileinfo mbstring mysqli pdo_mysql \
     && rm -rf /var/lib/apt/lists/* \
     && a2enmod rewrite headers \
-    && sed -ri '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
-    && mkdir -p /var/www/html/cache /var/www/html/uploads \
-    && chown -R www-data:www-data /var/www/html/cache /var/www/html/uploads
+    && sed -ri '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
 RUN printf '%s\n' \
     'upload_max_filesize=100M' \
@@ -18,4 +16,6 @@ RUN printf '%s\n' \
 
 COPY . /var/www/html/
 
+RUN mkdir -p /var/www/html/cache /var/www/html/uploads \
+    && chown -R www-data:www-data /var/www/html/cache /var/www/html/uploads
 EXPOSE 80
