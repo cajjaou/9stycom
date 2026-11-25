@@ -31,6 +31,7 @@ $_SESSION['installer_csrf'] ??= bin2hex(random_bytes(32));
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 set_time_limit(600);
+ini_set('memory_limit', '512M');
 ini_set('upload_max_filesize', '100M');
 ini_set('post_max_size', '110M');
 
@@ -271,7 +272,7 @@ function installer_repair_banner_slug(mysqli $db): string
             $update->execute();
         }
 
-        $db->query("ALTER TABLE `9s_custom_banners` MODIFY COLUMN `slug` VARCHAR(32) NOT NULL");
+        $db->query("ALTER TABLE `9s_custom_banners` MODIFY COLUMN `slug` VARCHAR(50) NOT NULL");
         $indexes = $db->query("SHOW INDEX FROM `9s_custom_banners`")->fetch_all(MYSQLI_ASSOC);
         $hasUniqueSlugIndex = false;
         foreach ($indexes as $index) {
@@ -377,33 +378,154 @@ function installer_table_ddl(string $statement): ?array
     return [$table, $ddl];
 }
 
-function installer_validate_upload(): array
+function installer_local_sql_files(): array
 {
-    if (!isset($_FILES['backup']) || ($_FILES['backup']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('Choose a valid SQL backup file.');
+    $files = [];
+    $roots = [
+        '' => __DIR__,
+        '../' => dirname(__DIR__),
+    ];
+    foreach ($roots as $prefix => $dir) {
+        if (!is_dir($dir)) {
+            continue;
+        }
+        $entries = scandir($dir);
+        if ($entries === false) {
+            continue;
+        }
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $fullPath = $dir . DIRECTORY_SEPARATOR . $entry;
+            if (!is_file($fullPath)) {
+                continue;
+            }
+            $lower = strtolower($entry);
+            if (str_ends_with($lower, '.sql') || str_ends_with($lower, '.sql.gz')) {
+                $key = $prefix . $entry;
+                $files[$key] = [
+                    'path' => $fullPath,
+                    'label' => $key . ' (' . number_format((filesize($fullPath) ?: 0) / 1048576, 1) . ' MB)',
+                ];
+            }
+        }
     }
-    $file = $_FILES['backup'];
-    if (!is_uploaded_file($file['tmp_name']) || (int) $file['size'] < 1 || (int) $file['size'] > 100 * 1024 * 1024) {
-        throw new RuntimeException('The uploaded file is invalid or exceeds the 100 MB limit.');
+    ksort($files);
+    return $files;
+}
+
+function installer_decode_sql(string $raw, string $filename): array
+{
+    if (str_ends_with(strtolower($filename), '.gz')) {
+        if (!function_exists('gzdecode')) {
+            throw new RuntimeException('Gzip decompression is not available in this PHP build.');
+        }
+        $decoded = @gzdecode($raw);
+        if ($decoded === false) {
+            throw new RuntimeException('The gzipped SQL backup could not be decompressed.');
+        }
+        $raw = $decoded;
     }
-    if (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'sql') {
-        throw new RuntimeException('Upload a plain .sql file.');
-    }
-    $sql = file_get_contents($file['tmp_name']);
-    if ($sql === false || trim($sql) === '') {
+
+    if (trim($raw) === '') {
         throw new RuntimeException('The SQL backup is empty or unreadable.');
     }
+
     // The source backup uses a MariaDB UCA-14 collation; MySQL uses UCA-9 names.
-    $collationConversions = substr_count(strtolower($sql), 'utf8mb4_uca1400_ai_ci');
+    $collationConversions = substr_count(strtolower($raw), 'utf8mb4_uca1400_ai_ci');
     if ($collationConversions > 0) {
-        $sql = str_ireplace('utf8mb4_uca1400_ai_ci', 'utf8mb4_0900_ai_ci', $sql);
+        $raw = str_ireplace('utf8mb4_uca1400_ai_ci', 'utf8mb4_0900_ai_ci', $raw);
     }
-    return [$sql, basename($file['name']), $collationConversions];
+
+    return [$raw, basename($filename), $collationConversions];
+}
+
+function installer_load_sql_source(array $localFiles): array
+{
+    $uploadError = $_FILES['backup']['error'] ?? UPLOAD_ERR_NO_FILE;
+    if ($uploadError !== UPLOAD_ERR_NO_FILE) {
+        if ($uploadError !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Choose a valid SQL backup file.');
+        }
+        $file = $_FILES['backup'];
+        if (!is_uploaded_file($file['tmp_name']) || (int) $file['size'] < 1 || (int) $file['size'] > 100 * 1024 * 1024) {
+            throw new RuntimeException('The uploaded file is invalid or exceeds the 100 MB limit.');
+        }
+        $lowerName = strtolower((string) $file['name']);
+        if (!str_ends_with($lowerName, '.sql') && !str_ends_with($lowerName, '.sql.gz')) {
+            throw new RuntimeException('Upload a .sql or .sql.gz file.');
+        }
+        $sql = file_get_contents($file['tmp_name']);
+        if ($sql === false) {
+            throw new RuntimeException('The uploaded SQL backup could not be read.');
+        }
+        return installer_decode_sql($sql, (string) $file['name']);
+    }
+
+    $selectedLocal = (string) ($_POST['local_file'] ?? '');
+    if ($selectedLocal !== '' && isset($localFiles[$selectedLocal])) {
+        $path = $localFiles[$selectedLocal]['path'];
+        $sql = file_get_contents($path);
+        if ($sql === false) {
+            throw new RuntimeException('The local SQL backup could not be read.');
+        }
+        return installer_decode_sql($sql, basename($path));
+    }
+
+    throw new RuntimeException('Choose a SQL backup file to upload or select a local SQL file.');
+}
+
+function installer_flush_multi_query(mysqli $db, string $batch): void
+{
+    $db->multi_query($batch);
+    do {
+        if ($res = $db->store_result()) {
+            $res->free();
+        }
+    } while ($db->more_results() && $db->next_result());
+}
+
+/**
+ * Execute a full SQL dump in ~2 MB multi_query batches so large dumps do not
+ * exceed MySQL's max_allowed_packet while remaining fast.
+ */
+function installer_execute_sql_dump(mysqli $db, string $sql, int $maxBatchBytes = 2097152): int
+{
+    $batch = '';
+    $batchBytes = 0;
+    $statements = 0;
+
+    foreach (installer_sql_statements($sql) as $statement) {
+        $piece = $statement . ";\n";
+        $pieceBytes = strlen($piece);
+
+        if ($batch !== '' && ($batchBytes + $pieceBytes) > $maxBatchBytes) {
+            installer_flush_multi_query($db, $batch);
+            $batch = '';
+            $batchBytes = 0;
+        }
+
+        if ($pieceBytes > $maxBatchBytes) {
+            installer_flush_multi_query($db, $piece);
+        } else {
+            $batch .= $piece;
+            $batchBytes += $pieceBytes;
+        }
+        $statements++;
+    }
+
+    if ($batch !== '') {
+        installer_flush_multi_query($db, $batch);
+    }
+
+    return $statements;
 }
 
 $error = '';
 $result = '';
 $completed = false;
+$localFiles = installer_local_sql_files();
 
 try {
     $db = installer_db();
@@ -423,7 +545,7 @@ try {
             throw new RuntimeException('The full restore has already completed. Only protected schema repair is allowed.');
         }
 
-        [$sql, $filename, $collationConversions] = installer_validate_upload();
+        [$sql, $filename, $collationConversions] = installer_load_sql_source($localFiles);
 
         if ($mode === 'repair') {
             $existing = [];
@@ -478,18 +600,14 @@ try {
             foreach ($views as $identifier) $db->query('DROP VIEW IF EXISTS ' . $identifier);
             foreach ($tables as $identifier) $db->query('DROP TABLE IF EXISTS ' . $identifier);
 
-            // Send the original dump as one MySQL multi-statement request so
-            // the server, not a PHP splitter, handles quoted SQL and comments.
-            $db->multi_query($sql);
-            do {
-                if ($res = $db->store_result()) $res->free();
-            } while ($db->more_results() && $db->next_result());
+            // Execute statements in ~2 MB multi_query batches to avoid MySQL max_allowed_packet limits.
+            $statementCount = installer_execute_sql_dump($db, $sql);
             $idRepair = installer_fix_auto_increment_ids($db);
             $bannerSlugRepair = installer_repair_banner_slug($db);
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             installer_mark_complete($db);
             $completed = true;
-            $result = 'Backup ' . $filename . ' imported successfully into database ' . DB_NAME . '. Disable the installer now.';
+            $result = 'Backup ' . $filename . ' imported successfully (' . $statementCount . ' SQL statements) into database ' . DB_NAME . '. Disable the installer now.';
             $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
@@ -518,8 +636,8 @@ if (isset($db) && $db instanceof mysqli) {
     body{font:16px/1.5 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 18px;color:#172033}
     section{border:1px solid #ccd3df;border-radius:10px;padding:20px;margin:18px 0}
     label{display:block;font-weight:650;margin:12px 0 5px}
-    input,button{font:inherit;padding:10px;max-width:100%}
-    input[type=password],input[type=file]{width:95%}
+    input,button,select{font:inherit;padding:10px;max-width:100%}
+    input[type=password],input[type=file],select{width:95%}
     button{cursor:pointer;margin-top:14px}
     .notice{background:#fff4d6;padding:12px;border-radius:8px}
     .error{background:#ffe7e7;padding:12px;border-radius:8px;white-space:pre-wrap}
@@ -560,8 +678,17 @@ if (isset($db) && $db instanceof mysqli) {
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
       <label for="token">Installer token</label>
       <input id="token" type="password" name="installer_token" required autocomplete="off">
-      <label for="backup">SQL backup (.sql, maximum 100 MB)</label>
-      <input id="backup" type="file" name="backup" accept=".sql,application/sql" required>
+      <?php if ($localFiles): ?>
+        <label for="local_file">Or select a local SQL file</label>
+        <select id="local_file" name="local_file">
+          <option value="">-- Use uploaded file below --</option>
+          <?php foreach ($localFiles as $key => $info): ?>
+            <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8') ?></option>
+          <?php endforeach; ?>
+        </select>
+      <?php endif; ?>
+      <label for="backup">SQL backup (.sql or .sql.gz, maximum 100 MB)</label>
+      <input id="backup" type="file" name="backup" accept=".sql,.gz,application/sql,application/gzip" <?= $localFiles ? '' : 'required' ?>>
       <button type="submit" name="mode" value="repair">Repair missing tables, all IDs, and banner slug</button>
     </form>
   <?php else: ?>
@@ -569,8 +696,17 @@ if (isset($db) && $db instanceof mysqli) {
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
       <label for="token">Installer token</label>
       <input id="token" type="password" name="installer_token" required autocomplete="off">
-      <label for="backup">SQL backup (.sql, maximum 100 MB)</label>
-      <input id="backup" type="file" name="backup" accept=".sql,application/sql" required>
+      <?php if ($localFiles): ?>
+        <label for="local_file">Select a local SQL file (recommended for large dumps)</label>
+        <select id="local_file" name="local_file">
+          <option value="">-- Use uploaded file below --</option>
+          <?php foreach ($localFiles as $key => $info): ?>
+            <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8') ?></option>
+          <?php endforeach; ?>
+        </select>
+      <?php endif; ?>
+      <label for="backup">SQL backup (.sql or .sql.gz, maximum 100 MB)</label>
+      <input id="backup" type="file" name="backup" accept=".sql,.gz,application/sql,application/gzip" <?= $localFiles ? '' : 'required' ?>>
       <section>
         <h2>Repair missing tables</h2>
         <p>Creates only absent tables from the uploaded backup schema. Existing tables and rows are left alone; this does not import records.</p>
