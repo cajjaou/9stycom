@@ -50,6 +50,7 @@ require __DIR__ . '/header.php';
             <div>
               <span class="cat" style="background:<?= category_color((int)$p['category_id']) ?>"><?= htmlspecialchars($p['category_name'] ?? 'عام') ?></span>
               <h3><?= htmlspecialchars($p['title']) ?></h3>
+              <span class="item-time"><?= time_ago($p['created_at']) ?></span>
             </div>
           </a>
         <?php endforeach; ?>
