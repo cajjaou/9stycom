@@ -7,7 +7,7 @@
 $perPage = 12;
 $offset = ($page - 1) * $perPage;
 
-$totalStmt = $pdo->prepare("SELECT COUNT(*) FROM news_posts WHERE category_id = ? AND status = 'published'");
+$totalStmt = $pdo->prepare("SELECT COUNT(*) FROM news_posts WHERE category_id = ? AND status = 'published' AND deleted_at IS NULL");
 $totalStmt->execute([$category['id']]);
 $total = (int)$totalStmt->fetchColumn();
 $totalPages = max(1, (int)ceil($total / $perPage));
@@ -16,14 +16,14 @@ $stmt = $pdo->prepare("
     SELECT p.id, p.slug, p.title, p.image, p.views, p.created_at, p.short_code,
            (SELECT COUNT(*) FROM news_comments nc WHERE nc.post_id = p.id AND (nc.status != 'hidden' OR nc.status IS NULL)) AS comments_count
     FROM news_posts p
-    WHERE p.category_id = ? AND p.status = 'published'
+    WHERE p.category_id = ? AND p.status = 'published' AND p.deleted_at IS NULL
     ORDER BY p.created_at DESC
     LIMIT $perPage OFFSET $offset
 ");
 $stmt->execute([$category['id']]);
 $posts = $stmt->fetchAll();
 
-$trending = $pdo->query("SELECT title, slug FROM news_posts WHERE status='published' ORDER BY views DESC LIMIT 5")->fetchAll();
+$trending = $pdo->query("SELECT title, slug FROM news_posts WHERE status='published' AND deleted_at IS NULL ORDER BY views DESC LIMIT 5")->fetchAll();
 
 $pageTitle = htmlspecialchars($category['name']) . ' — 9sty';
 require __DIR__ . '/header.php';

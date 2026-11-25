@@ -32,7 +32,7 @@ foreach ($categories as $cat) {
 }
 
 // 3. Articles
-$posts = $pdo->query("SELECT slug, created_at FROM news_posts WHERE status = 'published' ORDER BY id DESC")->fetchAll();
+$posts = $pdo->query("SELECT slug, created_at FROM news_posts WHERE status = 'published' AND deleted_at IS NULL ORDER BY id DESC")->fetchAll();
 foreach ($posts as $post) {
     $lastmod = date(DateTime::W3C, strtotime($post['created_at']));
     echo "  <url>\n";

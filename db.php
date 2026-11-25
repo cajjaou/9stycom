@@ -306,6 +306,17 @@ function get_db(): PDO
             } catch (PDOException $ex) {
             }
         }
+
+        // Auto-migration: Ensure deleted_at exists in news_posts (soft delete)
+        try {
+            $pdo->query("SELECT deleted_at FROM news_posts LIMIT 1");
+        } catch (PDOException $e) {
+            try {
+                $pdo->exec("ALTER TABLE news_posts ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL");
+                $pdo->exec("ALTER TABLE news_posts ADD INDEX idx_nposts_deleted_at (deleted_at)");
+            } catch (PDOException $ex) {
+            }
+        }
     }
     return $pdo;
 }

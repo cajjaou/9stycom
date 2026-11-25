@@ -9,7 +9,7 @@ $stmt = $pdo->prepare("
            (SELECT COUNT(*) FROM news_comments nc WHERE nc.post_id = p.id AND (nc.status != 'hidden' OR nc.status IS NULL)) AS comments_count
     FROM news_posts p
     LEFT JOIN news_categories c ON c.id = p.category_id
-    WHERE p.status = 'published'
+    WHERE p.status = 'published' AND p.deleted_at IS NULL
     ORDER BY p.created_at DESC
     LIMIT 24
 ");
@@ -22,7 +22,7 @@ $feedPosts = array_slice($posts, 4);
 
 $trending = $pdo->query("
     SELECT title, slug FROM news_posts
-    WHERE status = 'published'
+    WHERE status = 'published' AND deleted_at IS NULL
     ORDER BY views DESC LIMIT 5
 ")->fetchAll();
 

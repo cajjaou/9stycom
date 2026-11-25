@@ -20,7 +20,7 @@ try {
 }
 
 // 1) البحث عن الرابط في جدول المقالات news_posts
-$stmt = $pdo->prepare("SELECT id, slug FROM news_posts WHERE short_code = ? LIMIT 1");
+$stmt = $pdo->prepare("SELECT id, slug FROM news_posts WHERE short_code = ? AND deleted_at IS NULL LIMIT 1");
 $stmt->execute([$short_code]);
 $post = $stmt->fetch();
 

@@ -21,7 +21,7 @@ try {
                (SELECT COUNT(*) FROM news_comments nc WHERE nc.post_id = p.id AND (nc.status != 'hidden' OR nc.status IS NULL)) AS comments_count
         FROM news_posts p
         LEFT JOIN news_categories c ON c.id = p.category_id
-        WHERE p.status = 'published'
+        WHERE p.status = 'published' AND p.deleted_at IS NULL
         ORDER BY p.created_at DESC
         LIMIT :limit OFFSET :offset
     ");

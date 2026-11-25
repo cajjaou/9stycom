@@ -23,7 +23,7 @@ try {
                c.slug AS category_slug
         FROM news_posts p
         LEFT JOIN news_categories c ON c.id = p.category_id
-        WHERE p.created_at < ? AND p.status = 'published'
+        WHERE p.created_at < ? AND p.status = 'published' AND p.deleted_at IS NULL
         ORDER BY p.created_at DESC
         LIMIT 1
     ");
@@ -38,7 +38,7 @@ try {
                    c.slug AS category_slug
             FROM news_posts p
             LEFT JOIN news_categories c ON c.id = p.category_id
-            WHERE p.status = 'published'
+            WHERE p.status = 'published' AND p.deleted_at IS NULL
             ORDER BY p.created_at DESC
             LIMIT 1
         ");

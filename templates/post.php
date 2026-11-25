@@ -85,7 +85,7 @@ if (!function_exists('render_comment_tree')) {
     }
 }
 
-$trending = $pdo->query("SELECT title, slug FROM news_posts WHERE status='published' ORDER BY views DESC LIMIT 5")->fetchAll();
+$trending = $pdo->query("SELECT title, slug FROM news_posts WHERE status='published' AND deleted_at IS NULL ORDER BY views DESC LIMIT 5")->fetchAll();
 
 /*
  * Khtar 3achwa2iyan f anho paragraphe(s) ghadi ydakhel banner - kol

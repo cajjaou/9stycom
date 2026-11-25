@@ -33,7 +33,7 @@ $stmt = $pdo->prepare("
            c.slug AS category_slug
     FROM news_posts p
     LEFT JOIN news_categories c ON c.id = p.category_id
-    WHERE p.slug = ? AND p.status = 'published'
+    WHERE p.slug = ? AND p.status = 'published' AND p.deleted_at IS NULL
     LIMIT 1
 ");
 $stmt->execute([$slug]);

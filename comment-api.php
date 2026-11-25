@@ -167,7 +167,7 @@ if (!hash_equals($expectedHash, $spamHash)) {
 $pdo = get_db();
 
 // Verify post exists
-$postCheck = $pdo->prepare("SELECT id FROM news_posts WHERE id = ? LIMIT 1");
+$postCheck = $pdo->prepare("SELECT id FROM news_posts WHERE id = ? AND deleted_at IS NULL LIMIT 1");
 $postCheck->execute([$postId]);
 if (!$postCheck->fetch()) {
     echo json_encode(['success' => false, 'message' => 'المقال غير موجود.']);

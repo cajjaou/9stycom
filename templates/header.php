@@ -490,7 +490,7 @@ $tickerPosts = [];
 try {
     $tickerPosts = $pdo->query("
         SELECT id, title, slug, short_code FROM news_posts
-        WHERE status = 'published'
+        WHERE status = 'published' AND deleted_at IS NULL
         ORDER BY id DESC
         LIMIT 5
     ")->fetchAll();
