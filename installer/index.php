@@ -63,6 +63,55 @@ function installer_mark_complete(mysqli $db): void
  * site requests. A non-unique index is sufficient for AUTO_INCREMENT and
  * preserves legacy rows even if duplicate ids are present.
  */
+function installer_schema_status(mysqli $db): array
+{
+    $tables = [
+        '9s_adsense', '9s_custom_banners', '9s_users', 'ads_tracking',
+        'jb_news_sources', 'jb_promo_clicks', 'news_categories', 'news_comments',
+        'news_posts', 'news_settings', 'news_shortlinks', 'news_tracking',
+        'settings', 'share_links', 'short_links',
+    ];
+    $status = [];
+    foreach ($tables as $table) {
+        try {
+            $stmt = $db->prepare("
+                SELECT COLUMN_TYPE, EXTRA
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'id'
+                LIMIT 1
+            ");
+            $stmt->bind_param('s', $table);
+            $stmt->execute();
+            $column = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$column) {
+                $status[] = ['table' => $table, 'type' => 'id missing', 'ok' => false];
+                continue;
+            }
+            $auto = stripos((string) $column['EXTRA'], 'auto_increment') !== false;
+            $status[] = [
+                'table' => $table,
+                'type' => (string) $column['COLUMN_TYPE'],
+                'ok' => $auto,
+            ];
+        } catch (Throwable $e) {
+            $status[] = ['table' => $table, 'type' => 'check failed', 'ok' => false];
+        }
+    }
+
+    try {
+        $slug = $db->query("SHOW COLUMNS FROM `9s_custom_banners` LIKE 'slug'")->fetch_assoc();
+        $status[] = [
+            'table' => '9s_custom_banners.slug',
+            'type' => $slug ? (string) $slug['Type'] : 'column missing',
+            'ok' => (bool) $slug && stripos((string) $slug['Null'], 'NO') !== false,
+        ];
+    } catch (Throwable $e) {
+        $status[] = ['table' => '9s_custom_banners.slug', 'type' => 'check failed', 'ok' => false];
+    }
+    return $status;
+}
+
 function installer_fix_auto_increment_ids(mysqli $db): array
 {
     $tables = [
@@ -453,6 +502,11 @@ try {
     }
     $error = $e->getMessage();
 }
+
+$schemaStatus = [];
+if (isset($db) && $db instanceof mysqli) {
+    $schemaStatus = installer_schema_status($db);
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -470,22 +524,45 @@ try {
     .notice{background:#fff4d6;padding:12px;border-radius:8px}
     .error{background:#ffe7e7;padding:12px;border-radius:8px;white-space:pre-wrap}
     .success{background:#e4f6e9;padding:12px;border-radius:8px;white-space:pre-wrap}
+    .schema{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #d9e0e8}
+    .badge{font-weight:700}
+    .ready{color:#16723b}
+    .needs-fix{color:#a05a00}
+    .version{display:inline-block;background:#e9e4ff;color:#4d32a6;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:700}
   </style>
 </head>
 <body>
-  <h1>Private database installer</h1>
+  <h1>Private database installer <span class="version">Schema repair v2</span></h1>
   <p class="notice">Use only while the site is private. A full restore permanently drops every table and view in the configured application database, then imports the backup. Other databases, including MySQL system databases, are not touched. Take a backup first if any current data matters.</p>
   <?php if ($error !== ''): ?><p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
   <?php if ($result !== ''): ?><p class="success"><?= htmlspecialchars($result, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
+  <section class="schema">
+    <h2>Database schema status <span class="version">15 ID tables + banner slug</span></h2>
+    <p>Green means ready. Orange means repair is needed. This status checks the current database without changing it.</p>
+    <table>
+      <thead><tr><th>Table / column</th><th>Definition</th><th>Status</th></tr></thead>
+      <tbody>
+      <?php foreach ($schemaStatus as $item): ?>
+        <tr>
+          <td><code><?= htmlspecialchars($item['table'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></code></td>
+          <td><?= htmlspecialchars($item['type'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+          <td class="badge <?= $item['ok'] ? 'ready' : 'needs-fix' ?>"><?= $item['ok'] ? 'READY' : 'NEEDS REPAIR' ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </section>
   <?php if ($completed): ?>
-    <p>Full restore is complete. Full restore is locked. You may still run the protected missing-table and ID repair using the SQL backup, then set <code>INSTALLER_ENABLED=0</code> and redeploy.</p>
+    <p>Full restore is complete and remains locked. Upload the SQL schema and choose the repair action to fix missing tables, all listed integer IDs, and the banner slug.</p>
     <form method="post" enctype="multipart/form-data">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
       <label for="token">Installer token</label>
       <input id="token" type="password" name="installer_token" required autocomplete="off">
       <label for="backup">SQL backup (.sql, maximum 100 MB)</label>
       <input id="backup" type="file" name="backup" accept=".sql,application/sql" required>
-      <button type="submit" name="mode" value="repair">Repair missing tables and IDs</button>
+      <button type="submit" name="mode" value="repair">Repair missing tables, all IDs, and banner slug</button>
     </form>
   <?php else: ?>
     <form method="post" enctype="multipart/form-data">
@@ -497,7 +574,7 @@ try {
       <section>
         <h2>Repair missing tables</h2>
         <p>Creates only absent tables from the uploaded backup schema. Existing tables and rows are left alone; this does not import records.</p>
-        <button type="submit" name="mode" value="repair">Create missing tables</button>
+        <button type="submit" name="mode" value="repair">Repair missing tables, all IDs, and banner slug</button>
       </section>
       <section>
         <h2>Import the full backup</h2>
