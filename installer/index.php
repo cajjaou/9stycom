@@ -439,6 +439,14 @@ function installer_decode_sql(string $raw, string $filename): array
         $raw = str_ireplace('utf8mb4_uca1400_ai_ci', 'utf8mb4_0900_ai_ci', $raw);
     }
 
+    // MariaDB allows `date ... DEFAULT current_timestamp()`, which MySQL 8 rejects
+    // with "Invalid default value". Convert it to MySQL 8's `DEFAULT (CURDATE())`.
+    $raw = preg_replace(
+        '/(\bdate\b(?:\s+NOT\s+NULL|\s+NULL)?\s+DEFAULT\s+)current_timestamp\s*\(\s*\)/i',
+        '$1(CURDATE())',
+        $raw
+    ) ?? $raw;
+
     return [$raw, basename($filename), $collationConversions];
 }
 
