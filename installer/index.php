@@ -68,9 +68,9 @@ function installer_mark_complete(mysqli $db): void
 function installer_schema_status(mysqli $db): array
 {
     $tables = [
-        '9s_adsense', '9s_custom_banners', '9s_users', 'ads_tracking',
+        '9s_adsense', '9s_custom_banners', '9s_users',
         'jb_news_sources', 'jb_promo_clicks', 'news_categories', 'news_comments',
-        'news_posts', 'news_settings', 'news_shortlinks', 'news_tracking',
+        'news_posts', 'news_shortlinks', 'news_tracking',
         'settings', 'share_links', 'short_links',
     ];
     $status = [];
@@ -120,13 +120,11 @@ function installer_fix_auto_increment_ids(mysqli $db): array
         '9s_adsense',
         '9s_custom_banners',
         '9s_users',
-        'ads_tracking',
         'jb_news_sources',
         'jb_promo_clicks',
         'news_categories',
         'news_comments',
         'news_posts',
-        'news_settings',
         'news_shortlinks',
         'news_tracking',
         'settings',

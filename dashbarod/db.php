@@ -419,6 +419,12 @@ function slug_is_available(string $slug, string $excludeType = '', ?int $exclude
         } catch (PDOException $ex) {
         }
     }
+    // Drop unused legacy tables (settings & jb_promo_clicks are the active ones)
+    try {
+        $pdo->exec("DROP TABLE IF EXISTS `news_settings`");
+        $pdo->exec("DROP TABLE IF EXISTS `ads_tracking`");
+    } catch (PDOException $ex) {
+    }
     return true;
 }
 

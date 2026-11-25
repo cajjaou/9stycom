@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/errors.php';
-require_once __DIR__ . '/db.php';
+if (!function_exists('get_db')) {
+    require_once __DIR__ . '/db.php';
+}
 /**
  * janabio-products.php
  * Kayjib les produits mn API dyal janabio (status: public), o kaydir cache
@@ -12,9 +14,9 @@ require_once __DIR__ . '/db.php';
  */
 
 // Retrieve configuration dynamically from settings database table with fallback defaults
-$janabio_api_url = get_setting('janabio_api_url', 'https://team.janabio.com/api/products/read');
-$janabio_api_key = get_setting('janabio_api_key', getenv('JANABIO_API_KEY') ?: '');
-$janabio_api_secret = get_setting('janabio_api_secret', getenv('JANABIO_API_SECRET') ?: '');
+$janabio_api_url = get_setting('janabio_api_url', 'https://team.janabio.com/api/products/read') ?: 'https://team.janabio.com/api/products/read';
+$janabio_api_key = get_setting('janabio_api_key', getenv('JANABIO_API_KEY') ?: '') ?: '';
+$janabio_api_secret = get_setting('janabio_api_secret', getenv('JANABIO_API_SECRET') ?: '') ?: '';
 
 define('JANABIO_API_URL', $janabio_api_url);
 define('JANABIO_API_KEY', $janabio_api_key);
