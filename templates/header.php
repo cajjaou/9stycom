@@ -349,24 +349,29 @@ if (!empty($ads)) {
   footer{background:var(--topbar-bg);color:var(--topbar-text);text-align:center;font-size:12px;padding:24px;margin-top:30px;}
 
   /* ---------- Mobile refinements ---------- */
+  nav{-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  nav::-webkit-scrollbar{display:none;}
   @media (max-width:640px){
-    .topbar{font-size:10.5px;padding:5px 14px;}
-    .topbar span:last-child{display:none;}
-    header{padding:14px 14px 0;}
-    .header-logo{height:48px;}
-    .date-line{display:none;}
-    nav{gap:16px;}
-    nav a{font-size:13px;}
-    /* Removed ticker msg media query - handled above */
+    .topbar{font-size:11px;padding:7px 14px;flex-wrap:wrap;gap:8px;}
+    .topbar .social-label{display:none;}
+    .top-social-btn{width:24px;height:24px;}
+    header{padding:12px 14px 0;}
+    .brand-row{margin-bottom:10px;gap:10px;}
+    .header-logo{height:46px;}
+    .date-line{font-size:11px;background:var(--panel);padding:4px 10px;border-radius:999px;white-space:nowrap;}
+    nav{gap:14px;padding-bottom:8px;}
+    nav a{font-size:13px;padding-bottom:8px;}
     .wrap{padding:0 14px;margin:16px auto;gap:20px;}
-    .hero-main .cap{padding:40px 12px 12px;}
-    .hero-main .cap h2{font-size:16px;}
-    .hero-side .item img{width:76px;}
+    .hero-slider{aspect-ratio:16/10;}
+    .hero-slide .cap{padding:44px 14px 32px;}
+    .hero-slide .cap h2{font-size:16px;}
+    .hero-nav-btn{width:28px;height:28px;}
+    .hero-side .item img{width:84px;height:60px;}
     .hero-side h3{font-size:13px;}
     .feed{gap:12px;}
-    .post-body{padding:10px;}
+    .post-body{padding:12px;}
     .post-body h3{font-size:13.5px;}
-    .feed-title{font-size:15px;}
+    .feed-title{font-size:16px;}
     .art-title{font-size:20px;}
     .art-meta{gap:10px;font-size:11.5px;}
     .art-body p{font-size:15px;}
