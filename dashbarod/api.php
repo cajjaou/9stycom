@@ -312,11 +312,21 @@ function handle_image_upload($file_key)
 
     $filename = time() . '_' . substr(md5(uniqid()), 0, 8) . '.' . $ext;
     $target_dir = rtrim(UPLOAD_DIR, '/\\') . DIRECTORY_SEPARATOR;
-    if (!is_dir($target_dir) && !@mkdir($target_dir, 0755, true) && !is_dir($target_dir)) {
-        throw new Exception('مجلد رفع الصور غير موجود أو ما عندوش صلاحية الكتابة.');
-    }
-    if (!is_writable($target_dir)) {
-        throw new Exception('مجلد رفع الصور ما عندوش صلاحية الكتابة.');
+    $created = is_dir($target_dir) || @mkdir($target_dir, 0755, true);
+    $parentDir = dirname($target_dir);
+
+    $diagnostic = [
+        'upload_dir' => $target_dir,
+        'directory_exists' => is_dir($target_dir),
+        'directory_writable' => is_dir($target_dir) && is_writable($target_dir),
+        'parent_exists' => is_dir($parentDir),
+        'parent_writable' => is_dir($parentDir) && is_writable($parentDir),
+        'mkdir_succeeded' => $created,
+    ];
+
+    if (!$created || !is_dir($target_dir) || !is_writable($target_dir)) {
+        error_log('[image-upload-diagnostic] ' . json_encode($diagnostic));
+        throw new Exception('فشل رفع الصورة. شوف image-upload-diagnostic فـ Coolify logs.');
     }
 
     if (move_uploaded_file($file['tmp_name'], $target_dir . $filename)) {
