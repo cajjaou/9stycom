@@ -57,6 +57,123 @@ function installer_mark_complete(mysqli $db): void
     $db->query("INSERT IGNORE INTO `_9sty_installer_lock` (`id`) VALUES (1)");
 }
 
+/**
+ * Repair integer id columns from the known application backup schema.
+ * This runs only after an authenticated installer action, never on normal
+ * site requests. A non-unique index is sufficient for AUTO_INCREMENT and
+ * preserves legacy rows even if duplicate ids are present.
+ */
+function installer_fix_auto_increment_ids(mysqli $db): array
+{
+    $tables = [
+        '9s_adsense',
+        '9s_custom_banners',
+        '9s_users',
+        'ads_tracking',
+        'jb_news_sources',
+        'jb_promo_clicks',
+        'news_categories',
+        'news_comments',
+        'news_posts',
+        'news_settings',
+        'news_shortlinks',
+        'news_tracking',
+        'settings',
+        'share_links',
+        'short_links',
+    ];
+    $result = ['fixed' => [], 'skipped' => [], 'errors' => []];
+    $integerTypes = ['tinyint', 'smallint', 'mediumint', 'int', 'bigint'];
+
+    foreach ($tables as $table) {
+        try {
+            $columnQuery = $db->prepare("
+                SELECT COLUMN_TYPE, DATA_TYPE, EXTRA, IS_NULLABLE
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'id'
+                LIMIT 1
+            ");
+            $columnQuery->bind_param('s', $table);
+            $columnQuery->execute();
+            $column = $columnQuery->get_result()->fetch_assoc();
+            $columnQuery->close();
+
+            if (!$column) {
+                $result['skipped'][] = $table . ' (table/id not present)';
+                continue;
+            }
+            if (!in_array(strtolower((string) $column['DATA_TYPE']), $integerTypes, true)) {
+                $result['skipped'][] = $table . ' (id is not an integer)';
+                continue;
+            }
+            if (stripos((string) $column['EXTRA'], 'auto_increment') !== false) {
+                continue;
+            }
+
+            $columnType = strtolower((string) $column['COLUMN_TYPE']);
+            if (!preg_match('/^(tinyint|smallint|mediumint|int|bigint)(?:\\([0-9]+\\))?(?: unsigned)?$/D', $columnType)) {
+                $result['skipped'][] = $table . ' (unsupported id type)';
+                continue;
+            }
+
+            $quotedTable = '`' . str_replace('`', '``', $table) . '`';
+            if (strtoupper((string) $column['IS_NULLABLE']) === 'YES') {
+                $nullCount = (int) $db->query(
+                    'SELECT COUNT(*) FROM ' . $quotedTable . ' WHERE `id` IS NULL'
+                )->fetch_row()[0];
+                if ($nullCount > 0) {
+                    $result['errors'][] = $table . ': id contains NULL values; left unchanged';
+                    continue;
+                }
+            }
+
+            $indexes = $db->query('SHOW INDEX FROM ' . $quotedTable)->fetch_all(MYSQLI_ASSOC);
+            $idIsLeadingIndex = false;
+            $indexNames = [];
+            foreach ($indexes as $index) {
+                $indexNames[(string) $index['Key_name']] = true;
+                if ((string) $index['Column_name'] === 'id' && (int) $index['Seq_in_index'] === 1) {
+                    $idIsLeadingIndex = true;
+                }
+            }
+
+            $alterParts = [];
+            if (!$idIsLeadingIndex) {
+                $indexName = 'idx_9sty_auto_id';
+                $suffix = 1;
+                while (isset($indexNames[$indexName])) {
+                    $indexName = 'idx_9sty_auto_id_' . $suffix++;
+                }
+                $quotedIndex = '`' . $indexName . '`';
+                $alterParts[] = 'ADD INDEX ' . $quotedIndex . ' (`id`)';
+            }
+            $alterParts[] = 'MODIFY `id` ' . $columnType . ' NOT NULL AUTO_INCREMENT';
+            $db->query('ALTER TABLE ' . $quotedTable . ' ' . implode(', ', $alterParts));
+            $result['fixed'][] = $table;
+        } catch (Throwable $e) {
+            $result['errors'][] = $table . ': ' . $e->getMessage();
+            error_log('[installer-id-migration] ' . $table . ': ' . $e->getMessage());
+        }
+    }
+
+    return $result;
+}
+
+function installer_id_repair_message(array $result): string
+{
+    $message = '';
+    if ($result['fixed']) {
+        $message .= ' Enabled AUTO_INCREMENT for: ' . implode(', ', $result['fixed']) . '.';
+    }
+    if ($result['skipped']) {
+        $message .= ' Skipped: ' . implode(', ', $result['skipped']) . '.';
+    }
+    if ($result['errors']) {
+        $message .= ' ID repair warnings: ' . implode(' | ', $result['errors']) . '.';
+    }
+    return $message;
+}
+
 /** Split a plain SQL dump on semicolons outside strings, identifiers, and comments. */
 function installer_sql_statements(string $sql): Generator
 {
@@ -206,9 +323,11 @@ try {
                 $created[] = $table;
             }
             $db->query('SET FOREIGN_KEY_CHECKS=1');
+            $idRepair = installer_fix_auto_increment_ids($db);
             $result = $created
                 ? 'Added missing tables: ' . implode(', ', $created) . '. No rows were imported.'
                 : 'No missing tables were found. No rows were imported.';
+            $result .= installer_id_repair_message($idRepair);
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'EMPTY AND RESTORE') {
             if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
@@ -247,10 +366,12 @@ try {
             do {
                 if ($res = $db->store_result()) $res->free();
             } while ($db->more_results() && $db->next_result());
+            $idRepair = installer_fix_auto_increment_ids($db);
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             installer_mark_complete($db);
             $completed = true;
             $result = 'Backup ' . $filename . ' imported successfully into database ' . DB_NAME . '. Disable the installer now.';
+            $result .= installer_id_repair_message($idRepair);
             if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
             throw new RuntimeException('Choose a valid action. Full restore requires typing EMPTY AND RESTORE.');
