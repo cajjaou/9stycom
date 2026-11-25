@@ -301,12 +301,12 @@ try {
             http_response_code(403);
             throw new RuntimeException('Installer token is incorrect.');
         }
-        if ($completed) {
-            throw new RuntimeException('The full restore has already completed. Disable and remove the installer.');
+        $mode = (string) ($_POST['mode'] ?? '');
+        if ($completed && $mode !== 'repair') {
+            throw new RuntimeException('The full restore has already completed. Only protected schema repair is allowed.');
         }
 
         [$sql, $filename, $collationConversions] = installer_validate_upload();
-        $mode = (string) ($_POST['mode'] ?? '');
 
         if ($mode === 'repair') {
             $existing = [];
@@ -408,7 +408,15 @@ try {
   <?php if ($error !== ''): ?><p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
   <?php if ($result !== ''): ?><p class="success"><?= htmlspecialchars($result, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
   <?php if ($completed): ?>
-    <p>Full restore is already complete. Set <code>INSTALLER_ENABLED=0</code> and redeploy.</p>
+    <p>Full restore is complete. Full restore is locked. You may still run the protected missing-table and ID repair using the SQL backup, then set <code>INSTALLER_ENABLED=0</code> and redeploy.</p>
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+      <label for="token">Installer token</label>
+      <input id="token" type="password" name="installer_token" required autocomplete="off">
+      <label for="backup">SQL backup (.sql, maximum 100 MB)</label>
+      <input id="backup" type="file" name="backup" accept=".sql,application/sql" required>
+      <button type="submit" name="mode" value="repair">Repair missing tables and IDs</button>
+    </form>
   <?php else: ?>
     <form method="post" enctype="multipart/form-data">
       <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
