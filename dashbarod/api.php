@@ -2701,7 +2701,7 @@ try {
                     SELECT s.id, s.post_id, s.short_code, s.si_code, s.platform, s.visits, s.created_at, s.last_visit_at,
                            p.title AS post_title, p.slug AS post_slug
                     FROM post_share_links s
-                    LEFT JOIN news_posts p ON p.id = s.post_id OR p.short_code = s.short_code
+                    LEFT JOIN news_posts p ON p.id = s.post_id OR p.short_code COLLATE utf8mb4_unicode_ci = s.short_code COLLATE utf8mb4_unicode_ci
                     ORDER BY s.visits DESC, s.created_at DESC
                     LIMIT :lim OFFSET :off
                 ");
