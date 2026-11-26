@@ -143,6 +143,7 @@ var SECTION_META = {
   users: { title: 'المستخدمون', subtitle: 'صلاحيات الوصول للوحة' },
   shortlinks: { title: 'الروابط المختصرة', subtitle: 'إدارة الروابط المخصصة' },
   shares: { title: 'تتبع المشاركات (SI)', subtitle: 'عدد المشاركات والزيارات القادمة عبر كل رمز مشاركة' },
+  apilogs: { title: 'سجل عمليات API', subtitle: 'مراقبة وتدقيق جميع طلبات التكامل الخارجي (n8n / REST)' },
   settings: { title: 'إعدادات التتبع', subtitle: 'Analytics, Pixel & SEO' },
   trash: { title: 'سلة المهملات', subtitle: 'العناصر المحذوفة — استعادتها أو حذفها نهائياً' }
 
@@ -179,9 +180,116 @@ function loadSection(name) {
     case 'users': renderUsers(area); break;
     case 'shortlinks': renderShortLinks(area); break;
     case 'shares': renderShares(area); break;
+    case 'apilogs': renderApiLogs(area); break;
     case 'settings': renderSettings(area); break;
     case 'trash': renderTrash(area); break;
   }
+}
+
+// ---------- API Audit Logs ----------
+var apiLogsState = { action_type: '', resource: '', search: '' };
+function renderApiLogs(container, page = 1) {
+  container.innerHTML = `<div class="card"><div class="loader-shimmer" style="height:80px;"></div></div>`;
+  const params = new URLSearchParams({
+    action: 'list_api_logs',
+    page: String(page),
+    action_type: apiLogsState.action_type,
+    resource: apiLogsState.resource,
+    search: apiLogsState.search
+  });
+  fetch('api.php?' + params.toString())
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        container.innerHTML = `<div class="error-msg">${escapeHTML(data.message)}</div>`;
+        return;
+      }
+      const stats = data.stats || { total_calls: 0, creates: 0, updates: 0, deletes: 0 };
+      const actionBadge = (t) => {
+        if (t === 'CREATE') return '<span class="badge active">CREATE</span>';
+        if (t === 'UPDATE') return '<span class="badge" style="background:#dbeafe;color:#1d4ed8;">UPDATE</span>';
+        if (t === 'DELETE') return '<span class="badge inactive">DELETE</span>';
+        return '<span class="badge" style="background:#f1f5f9;color:#475569;">READ</span>';
+      };
+      let rows = '';
+      (data.logs || []).forEach(l => {
+        const statusOk = Number(l.status_code) < 400;
+        rows += `
+          <tr>
+            <td style="color:var(--text-muted);font-weight:600;">#${l.id}</td>
+            <td><strong>${escapeHTML(l.api_key_name || '—')}</strong></td>
+            <td>${actionBadge(l.action_type)}</td>
+            <td style="direction:ltr;text-align:right;"><code>${escapeHTML(l.method)} ${escapeHTML(l.endpoint)}</code></td>
+            <td>${escapeHTML(l.resource)}${l.record_id ? ' #' + escapeHTML(l.record_id) : ''}</td>
+            <td><span class="badge ${statusOk ? 'active' : 'inactive'}">${l.status_code}</span></td>
+            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;direction:ltr;text-align:right;" title="${escapeHTML(l.payload_summary || '')}">${escapeHTML(l.payload_summary || '—')}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHTML(l.ip_address || '—')}</td>
+            <td style="font-size:12px;color:var(--text-muted);">${escapeHTML((l.created_at || '').substring(0, 19))}</td>
+          </tr>`;
+      });
+
+      const pag = data.pagination || { page: 1, total_pages: 1 };
+      let pagHtml = '';
+      if (pag.total_pages > 1) {
+        pagHtml = `<div style="display:flex;gap:8px;justify-content:center;margin-top:16px;">`;
+        for (let p = 1; p <= pag.total_pages; p++) {
+          pagHtml += `<button class="btn ${p === pag.page ? '' : 'btn-secondary'}" style="padding:6px 12px;" onclick="renderApiLogs(document.getElementById('main-content'), ${p})">${p}</button>`;
+        }
+        pagHtml += `</div>`;
+      }
+
+      container.innerHTML = `
+        <div class="stats-grid" style="margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#ede9fe;color:#7c3aed;"><i data-lucide="activity"></i></div>
+            <div class="stat-info"><span class="stat-label">إجمالي الطلبات</span><span class="stat-value">${Number(stats.total_calls || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#ecfdf5;color:#059669;"><i data-lucide="plus-circle"></i></div>
+            <div class="stat-info"><span class="stat-label">عمليات الإنشاء (CREATE)</span><span class="stat-value">${Number(stats.creates || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#dbeafe;color:#2563eb;"><i data-lucide="edit-3"></i></div>
+            <div class="stat-info"><span class="stat-label">عمليات التحديث (UPDATE)</span><span class="stat-value">${Number(stats.updates || 0).toLocaleString('en')}</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#fee2e2;color:#dc2626;"><i data-lucide="trash-2"></i></div>
+            <div class="stat-info"><span class="stat-label">عمليات الحذف (DELETE)</span><span class="stat-value">${Number(stats.deletes || 0).toLocaleString('en')}</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+            <h2>سجل نشاط API</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <select id="apilog-action-filter" class="form-control" style="width:auto;" onchange="apiLogsState.action_type=this.value;renderApiLogs(document.getElementById('main-content'),1)">
+                <option value="">كل العمليات</option>
+                <option value="CREATE" ${apiLogsState.action_type === 'CREATE' ? 'selected' : ''}>CREATE</option>
+                <option value="READ" ${apiLogsState.action_type === 'READ' ? 'selected' : ''}>READ</option>
+                <option value="UPDATE" ${apiLogsState.action_type === 'UPDATE' ? 'selected' : ''}>UPDATE</option>
+                <option value="DELETE" ${apiLogsState.action_type === 'DELETE' ? 'selected' : ''}>DELETE</option>
+              </select>
+              <select id="apilog-resource-filter" class="form-control" style="width:auto;" onchange="apiLogsState.resource=this.value;renderApiLogs(document.getElementById('main-content'),1)">
+                <option value="">كل الموارد</option>
+                <option value="posts" ${apiLogsState.resource === 'posts' ? 'selected' : ''}>posts</option>
+                <option value="categories" ${apiLogsState.resource === 'categories' ? 'selected' : ''}>categories</option>
+                <option value="banners" ${apiLogsState.resource === 'banners' ? 'selected' : ''}>banners</option>
+                <option value="shortlinks" ${apiLogsState.resource === 'shortlinks' ? 'selected' : ''}>shortlinks</option>
+                <option value="comments" ${apiLogsState.resource === 'comments' ? 'selected' : ''}>comments</option>
+              </select>
+              <a href="/api-docs" target="_blank" class="btn"><i data-lucide="key-round"></i> إدارة المفاتيح والتوثيق</a>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead><tr><th>ID</th><th>المفتاح</th><th>العملية</th><th>المسار</th><th>المورد</th><th>الحالة</th><th>البيانات</th><th>IP</th><th>التاريخ</th></tr></thead>
+              <tbody>${rows || `<tr><td colspan="9"><div class="empty-state"><i data-lucide="inbox"></i><p>لا توجد سجلات API بعد</p></div></td></tr>`}</tbody>
+            </table>
+          </div>
+          ${pagHtml}
+        </div>`;
+      refreshIcons();
+    })
+    .catch(() => { container.innerHTML = `<div class="error-msg">تعذّر الاتصال</div>`; });
 }
 
 // ---------- Share Referrals (SI) ----------

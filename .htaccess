@@ -17,6 +17,12 @@ RewriteRule ^s/([^/]+)/?$ share.php?c=$1 [L,QSA]
 # Clean promo links (e.g., /go/JBpidXXXXX)
 RewriteRule ^go/JBpid([a-zA-Z0-9_-]+)/?$ go/promo.php?hash=$1 [L,QSA]
 
+# REST API v1 routing (/api/posts/read, /api/categories/create, etc.)
+RewriteRule ^api/(.+?)/?$ api/index.php?route=$1 [L,QSA]
+
+# Protected API Documentation (Admin only)
+RewriteRule ^api-docs/?$ dashbarod/api-docs.php [L,QSA]
+
 
 # Options bach tban rassail errors chwia (khtiyari, testih)
 # Options -MultiViews

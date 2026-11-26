@@ -268,6 +268,14 @@ $themeCssVars = function_exists('ja_theme_css_vars') ? ja_theme_css_vars() : [];
         <div class="sidebar-section">
           <span class="section-label">النظام</span>
           <nav class="nav-list">
+            <a class="nav-item" id="menu-apilogs" onclick="loadSection('apilogs')">
+              <span class="nav-icon"><i data-lucide="history"></i></span>
+              <span>سجل API (History)</span>
+            </a>
+            <a class="nav-item" href="/api-docs" target="_blank">
+              <span class="nav-icon"><i data-lucide="book-open-check"></i></span>
+              <span>توثيق ومفاتيح API</span>
+            </a>
             <a class="nav-item" id="menu-trash" onclick="loadSection('trash')">
               <span class="nav-icon"><i data-lucide="trash-2"></i></span>
               <span>سلة المهملات</span>

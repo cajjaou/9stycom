@@ -425,6 +425,55 @@ function slug_is_available(string $slug, string $excludeType = '', ?int $exclude
         $pdo->exec("DROP TABLE IF EXISTS `ads_tracking`");
     } catch (PDOException $ex) {
     }
+    // Auto-migration: Ensure api_keys, api_logs, and news_categories.deleted_at exist
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `api_keys` (
+              `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `name` VARCHAR(100) NOT NULL,
+              `key_prefix` VARCHAR(20) NOT NULL,
+              `key_hash` CHAR(64) NOT NULL,
+              `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+              `last_used_at` TIMESTAMP NULL DEFAULT NULL,
+              `created_by` INT UNSIGNED DEFAULT NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              `revoked_at` TIMESTAMP NULL DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `uq_api_keys_hash` (`key_hash`),
+              KEY `idx_api_keys_active` (`is_active`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `api_logs` (
+              `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+              `api_key_id` INT UNSIGNED DEFAULT NULL,
+              `api_key_name` VARCHAR(100) DEFAULT NULL,
+              `method` VARCHAR(10) NOT NULL,
+              `endpoint` VARCHAR(150) NOT NULL,
+              `resource` VARCHAR(50) NOT NULL,
+              `record_id` VARCHAR(64) DEFAULT NULL,
+              `action_type` ENUM('CREATE','READ','UPDATE','DELETE') NOT NULL,
+              `status_code` SMALLINT UNSIGNED NOT NULL DEFAULT 200,
+              `payload_summary` TEXT DEFAULT NULL,
+              `ip_address` VARCHAR(45) DEFAULT NULL,
+              `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `idx_api_logs_created_at` (`created_at`),
+              KEY `idx_api_logs_action` (`action_type`),
+              KEY `idx_api_logs_resource` (`resource`),
+              KEY `idx_api_logs_key` (`api_key_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+    } catch (PDOException $ex) {
+    }
+    try {
+        $pdo->query("SELECT deleted_at FROM news_categories LIMIT 1");
+    } catch (PDOException $e) {
+        try {
+            $pdo->exec("ALTER TABLE news_categories ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL");
+        } catch (PDOException $ex) {
+        }
+    }
     return true;
 }
 

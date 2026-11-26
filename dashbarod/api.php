@@ -2932,6 +2932,111 @@ case 'empty_trash':
     try { $deleted += (int)$pdo->exec("DELETE FROM news_posts WHERE deleted_at IS NOT NULL"); } catch (Exception $e) {}
     echo json_encode(['success' => true, 'message' => "تم تفريغ السلة ($deleted عنصر)"]);
     break;
+
+        // ================= API KEYS & AUDIT LOGS =================
+        case 'list_api_keys':
+            try {
+                $rows = $pdo->query("
+                    SELECT id, name, key_prefix, is_active, last_used_at, created_at, revoked_at
+                    FROM api_keys
+                    ORDER BY id DESC
+                ")->fetchAll();
+                echo json_encode(['success' => true, 'keys' => $rows]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
+
+        case 'create_api_key':
+            $name = trim((string)($_POST['name'] ?? ''));
+            if ($name === '') {
+                echo json_encode(['success' => false, 'message' => 'اسم المفتاح إجباري.']);
+                break;
+            }
+            $rawKey = '9sty_' . bin2hex(random_bytes(20));
+            $prefix = substr($rawKey, 0, 14) . '...';
+            $hash = hash('sha256', $rawKey);
+            $adminId = (int)($_SESSION['admin_user_id'] ?? 1);
+            $stmt = $pdo->prepare("
+                INSERT INTO api_keys (name, key_prefix, key_hash, is_active, created_by)
+                VALUES (?, ?, ?, 1, ?)
+            ");
+            $stmt->execute([$name, $prefix, $hash, $adminId]);
+            echo json_encode([
+                'success' => true,
+                'message' => 'تم إنشاء مفتاح API بنجاح. انسخه الآن فلن يظهر كاملاً مرة أخرى.',
+                'api_key' => $rawKey,
+                'id' => (int)$pdo->lastInsertId(),
+            ]);
+            break;
+
+        case 'revoke_api_key':
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) {
+                echo json_encode(['success' => false, 'message' => 'معرف غير صالح.']);
+                break;
+            }
+            $pdo->prepare("UPDATE api_keys SET is_active = 0, revoked_at = NOW() WHERE id = ?")->execute([$id]);
+            echo json_encode(['success' => true, 'message' => 'تم إلغاء تفعيل المفتاح بنجاح.']);
+            break;
+
+        case 'list_api_logs':
+            try {
+                $page = max(1, (int)($_GET['page'] ?? 1));
+                $perPage = 25;
+                $offset = ($page - 1) * $perPage;
+                $where = ['1=1'];
+                $params = [];
+
+                $actionFilter = strtoupper(trim((string)($_GET['action_type'] ?? '')));
+                if (in_array($actionFilter, ['CREATE', 'READ', 'UPDATE', 'DELETE'], true)) {
+                    $where[] = 'action_type = ?';
+                    $params[] = $actionFilter;
+                }
+                $resourceFilter = strtolower(trim((string)($_GET['resource'] ?? '')));
+                if ($resourceFilter !== '') {
+                    $where[] = 'resource = ?';
+                    $params[] = $resourceFilter;
+                }
+                $search = trim((string)($_GET['search'] ?? ''));
+                if ($search !== '') {
+                    $where[] = '(endpoint LIKE ? OR api_key_name LIKE ? OR record_id LIKE ? OR ip_address LIKE ?)';
+                    $q = "%$search%";
+                    array_push($params, $q, $q, $q, $q);
+                }
+
+                $wSql = implode(' AND ', $where);
+                $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM api_logs WHERE $wSql");
+                $cntStmt->execute($params);
+                $total = (int)$cntStmt->fetchColumn();
+
+                $stmt = $pdo->prepare("
+                    SELECT id, api_key_id, api_key_name, method, endpoint, resource, record_id, action_type, status_code, payload_summary, ip_address, created_at
+                    FROM api_logs
+                    WHERE $wSql
+                    ORDER BY id DESC
+                    LIMIT $perPage OFFSET $offset
+                ");
+                $stmt->execute($params);
+
+                $stats = $pdo->query("
+                    SELECT COUNT(*) AS total_calls,
+                           SUM(CASE WHEN action_type = 'CREATE' THEN 1 ELSE 0 END) AS creates,
+                           SUM(CASE WHEN action_type = 'UPDATE' THEN 1 ELSE 0 END) AS updates,
+                           SUM(CASE WHEN action_type = 'DELETE' THEN 1 ELSE 0 END) AS deletes
+                    FROM api_logs
+                ")->fetch() ?: ['total_calls' => 0, 'creates' => 0, 'updates' => 0, 'deletes' => 0];
+
+                echo json_encode([
+                    'success' => true,
+                    'logs' => $stmt->fetchAll(),
+                    'stats' => $stats,
+                    'pagination' => ['page' => $page, 'per_page' => $perPage, 'total' => $total, 'total_pages' => max(1, (int)ceil($total / $perPage))],
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            break;
         default:
             echo json_encode(['success' => false, 'message' => 'الطلب غير معروف.']);
             break;
