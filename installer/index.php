@@ -850,11 +850,37 @@ try {
             throw new RuntimeException('Installer token is incorrect.');
         }
         $mode = (string) ($_POST['mode'] ?? '');
-        if ($completed && $mode !== 'repair') {
-            throw new RuntimeException('The full restore has already completed. Only protected schema repair is allowed.');
-        }
+        $confirmText = trim((string) ($_POST['confirm_restore'] ?? ''));
 
-        if ($mode === 'repair') {
+        if ($mode === 'wipe') {
+            if (!in_array($confirmText, ['WIPE ALL DATA', 'EMPTY AND RESTORE'], true)) {
+                throw new RuntimeException('To wipe all existing data, type WIPE ALL DATA or EMPTY AND RESTORE.');
+            }
+            if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
+                throw new RuntimeException('Refusing to wipe a MySQL system database.');
+            }
+            $db->query('SET FOREIGN_KEY_CHECKS=0');
+            $views = [];
+            $tables = [];
+            foreach ($db->query('SHOW FULL TABLES')->fetch_all(MYSQLI_NUM) as $row) {
+                $identifier = '`' . str_replace('`', '``', (string) $row[0]) . '`';
+                if (strtoupper((string) ($row[1] ?? '')) === 'VIEW') {
+                    $views[] = $identifier;
+                } else {
+                    $tables[] = $identifier;
+                }
+            }
+            foreach ($views as $identifier) {
+                $db->query('DROP VIEW IF EXISTS ' . $identifier);
+            }
+            foreach ($tables as $identifier) {
+                $db->query('DROP TABLE IF EXISTS ' . $identifier);
+            }
+            $defaultAdded = installer_ensure_default_schema($db);
+            $db->query('SET FOREIGN_KEY_CHECKS=1');
+            $completed = false;
+            $result = 'All existing data in ' . DB_NAME . ' was wiped (' . count($tables) . ' tables dropped) and fresh default tables were created (' . implode(', ', $defaultAdded) . '). You can now import a backup.';
+        } elseif ($mode === 'repair') {
             $created = [];
             $collationConversions = 0;
             $hasSqlSource = (($_FILES['backup']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) || (trim((string) ($_POST['local_file'] ?? '')) !== '');
@@ -887,7 +913,7 @@ try {
             $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
             if ($collationConversions > 0)
                 $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
-        } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'EMPTY AND RESTORE') {
+        } elseif ($mode === 'restore' && $confirmText === 'EMPTY AND RESTORE') {
             [$sql, $filename, $collationConversions] = installer_load_sql_source($localFiles);
             if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
                 throw new RuntimeException('Refusing to restore into a MySQL system database. Set DB_NAME to the application database.');
@@ -1503,40 +1529,27 @@ foreach ($schemaStatus as $item) {
                         </div>
                     </section>
 
-                    <?php if ($completed): ?>
+                    <div class="actions-split">
                         <section class="card">
-                            <div class="card-header">
-                                <h2 class="card-title">2. Protected Schema Repair</h2>
-                                <span class="pill ok">Restore Locked</span>
-                            </div>
-                            <p class="card-desc">Full restore is complete and locked. You can still run schema repair to
-                                create missing tables, enable AUTO_INCREMENT IDs, and backfill banner slugs.</p>
-                            <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair missing tables,
-                                all IDs &amp; banner slug</button>
+                            <h2 class="card-title">2a. Repair Schema Only</h2>
+                            <p class="card-desc">Creates missing default/backup tables and repairs IDs &amp; banner slugs without
+                                touching existing rows.</p>
+                            <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair schema &amp;
+                                IDs</button>
                         </section>
-                    <?php else: ?>
-                        <div class="actions-split">
-                            <section class="card">
-                                <h2 class="card-title">2a. Repair Schema Only</h2>
-                                <p class="card-desc">Creates missing tables and repairs IDs &amp; banner slugs without
-                                    touching existing rows.</p>
-                                <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair schema &amp;
-                                    IDs</button>
-                            </section>
 
-                            <section class="card">
-                                <h2 class="card-title">2b. Full Database Restore</h2>
-                                <p class="card-desc">Drops all tables/views in
-                                    <code><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></code> and imports the full
-                                    dump.</p>
-                                <label for="confirm">Type <code>EMPTY AND RESTORE</code></label>
-                                <input id="confirm" name="confirm_restore" autocomplete="off"
-                                    placeholder="EMPTY AND RESTORE">
-                                <button class="btn btn-danger" type="submit" name="mode" value="restore">Import full
-                                    backup</button>
-                            </section>
-                        </div>
-                    <?php endif; ?>
+                        <section class="card">
+                            <h2 class="card-title">2b. Wipe Data &amp; Full Restore</h2>
+                            <p class="card-desc">Drops all tables/views in
+                                <code><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></code>, resets default tables, or imports the full dump.</p>
+                            <label for="confirm">Type <code>EMPTY AND RESTORE</code> (or <code>WIPE ALL DATA</code> to reset empty)</label>
+                            <input id="confirm" name="confirm_restore" autocomplete="off"
+                                placeholder="EMPTY AND RESTORE">
+                            <button class="btn btn-danger" type="submit" name="mode" value="restore">Wipe &amp; import full
+                                backup</button>
+                            <button class="btn btn-danger" style="background:linear-gradient(135deg,#991b1b,#7f1d1d);" type="submit" name="mode" value="wipe">Wipe all data only (reset empty)</button>
+                        </section>
+                    </div>
                 </form>
             </div>
 
