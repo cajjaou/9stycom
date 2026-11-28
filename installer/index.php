@@ -59,6 +59,288 @@ function installer_mark_complete(mysqli $db): void
     $db->query("INSERT IGNORE INTO `_9sty_installer_lock` (`id`) VALUES (1)");
 }
 
+function installer_ensure_default_schema(mysqli $db): array
+{
+    $added = [];
+    $existingTables = [];
+    foreach ($db->query('SHOW TABLES')->fetch_all(MYSQLI_NUM) as $row) {
+        $existingTables[(string) $row[0]] = true;
+    }
+
+    $defaultTables = [
+        '9s_adsense' => "CREATE TABLE IF NOT EXISTS `9s_adsense` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `slot_name` VARCHAR(50) NOT NULL,
+            `ad_client` VARCHAR(50) NOT NULL,
+            `ad_slot` VARCHAR(50) NOT NULL,
+            `ad_format` VARCHAR(20) NOT NULL DEFAULT 'auto',
+            `code` TEXT NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `slot_name` (`slot_name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        '9s_custom_banners' => "CREATE TABLE IF NOT EXISTS `9s_custom_banners` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `slug` VARCHAR(50) NOT NULL,
+            `name` VARCHAR(150) NOT NULL,
+            `image` VARCHAR(255) NOT NULL,
+            `url` VARCHAR(255) NOT NULL,
+            `price` VARCHAR(50) DEFAULT NULL,
+            `promo_price` VARCHAR(50) DEFAULT NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `idx_banner_slug` (`slug`),
+            KEY `idx_banner_deleted_at` (`deleted_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        '9s_users' => "CREATE TABLE IF NOT EXISTS `9s_users` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `username` VARCHAR(100) NOT NULL,
+            `email` VARCHAR(150) NOT NULL,
+            `password` VARCHAR(255) NOT NULL,
+            `role` TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `username` (`username`),
+            UNIQUE KEY `email` (`email`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'jb_news_sources' => "CREATE TABLE IF NOT EXISTS `jb_news_sources` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(150) NOT NULL,
+            `website_url` VARCHAR(255) DEFAULT NULL,
+            `rss_url` VARCHAR(255) DEFAULT NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'jb_promo_clicks' => "CREATE TABLE IF NOT EXISTS `jb_promo_clicks` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `product_id` VARCHAR(50) NOT NULL,
+            `post_id` INT UNSIGNED DEFAULT NULL,
+            `page_url` VARCHAR(500) DEFAULT NULL,
+            `device_type` ENUM('mobile','tablet','desktop') NOT NULL DEFAULT 'desktop',
+            `user_agent` VARCHAR(500) DEFAULT NULL,
+            `ip_hash` CHAR(64) DEFAULT NULL,
+            `referrer` VARCHAR(500) DEFAULT NULL,
+            `clicked_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_product` (`product_id`),
+            KEY `idx_post` (`post_id`),
+            KEY `idx_clicked_at` (`clicked_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'news_categories' => "CREATE TABLE IF NOT EXISTS `news_categories` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(150) NOT NULL,
+            `slug` VARCHAR(150) NOT NULL,
+            `status` ENUM('active','inactive') NOT NULL DEFAULT 'active',
+            `show_in_header` TINYINT(1) NOT NULL DEFAULT 1,
+            `at_home` TINYINT(1) NOT NULL DEFAULT 0,
+            `meta_title` VARCHAR(255) DEFAULT NULL,
+            `meta_description` TEXT DEFAULT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `slug` (`slug`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'news_comments' => "CREATE TABLE IF NOT EXISTS `news_comments` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `post_id` INT NOT NULL,
+            `parent_id` INT DEFAULT NULL,
+            `name` VARCHAR(100) NOT NULL,
+            `email` VARCHAR(150) DEFAULT NULL,
+            `comment` TEXT NOT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            `status` ENUM('approved','hidden') DEFAULT 'approved',
+            `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_parent_id` (`parent_id`),
+            KEY `idx_cmt_post_id` (`post_id`),
+            KEY `idx_ncmt_deleted_at` (`deleted_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'news_posts' => "CREATE TABLE IF NOT EXISTS `news_posts` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `post_id` VARCHAR(64) NOT NULL,
+            `auther_id` INT UNSIGNED NOT NULL DEFAULT 1,
+            `category_id` INT NOT NULL DEFAULT 1,
+            `short_code` VARCHAR(32) NOT NULL,
+            `title` VARCHAR(500) NOT NULL,
+            `slug` VARCHAR(255) NOT NULL,
+            `excerpt` TEXT DEFAULT NULL,
+            `content` LONGTEXT DEFAULT NULL,
+            `image` VARCHAR(500) DEFAULT NULL,
+            `status` ENUM('draft','published','archived') NOT NULL DEFAULT 'published',
+            `post_type` VARCHAR(20) NOT NULL DEFAULT 'article',
+            `views` INT UNSIGNED NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `slug_idx` (`slug`),
+            UNIQUE KEY `short_code_idx` (`short_code`),
+            KEY `idx_nposts_status` (`status`),
+            KEY `idx_nposts_deleted_at` (`deleted_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'news_shortlinks' => "CREATE TABLE IF NOT EXISTS `news_shortlinks` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `short_code` VARCHAR(50) NOT NULL,
+            `destination_url` TEXT NOT NULL,
+            `status` ENUM('active','inactive') NOT NULL DEFAULT 'active',
+            `updated_at` TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `short_code` (`short_code`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'news_tracking' => "CREATE TABLE IF NOT EXISTS `news_tracking` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `short_code` VARCHAR(50) NOT NULL,
+            `si_code` VARCHAR(16) DEFAULT NULL,
+            `ip_address` VARCHAR(45) DEFAULT NULL,
+            `user_agent` VARCHAR(500) DEFAULT NULL,
+            `referer` VARCHAR(500) DEFAULT NULL,
+            `country` VARCHAR(100) DEFAULT NULL,
+            `city` VARCHAR(100) DEFAULT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_nt_short_code` (`short_code`),
+            KEY `idx_nt_si_code` (`si_code`),
+            KEY `idx_nt_created_at` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'online_users' => "CREATE TABLE IF NOT EXISTS `online_users` (
+            `session_id` VARCHAR(128) NOT NULL,
+            `page_slug` VARCHAR(200) NOT NULL,
+            `last_activity` INT NOT NULL,
+            `ip` VARCHAR(45) DEFAULT NULL,
+            `user_agent` VARCHAR(255) DEFAULT NULL,
+            `created_at` DATE NOT NULL DEFAULT (CURDATE()),
+            PRIMARY KEY (`session_id`, `page_slug`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'settings' => "CREATE TABLE IF NOT EXISTS `settings` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `setting_key` VARCHAR(100) NOT NULL,
+            `setting_value` TEXT DEFAULT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `setting_key` (`setting_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'share_links' => "CREATE TABLE IF NOT EXISTS `share_links` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `short_code` VARCHAR(50) DEFAULT NULL,
+            `title` VARCHAR(255) DEFAULT NULL,
+            `url` TEXT DEFAULT NULL,
+            `status` ENUM('active','inactive') DEFAULT 'active',
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `short_code` (`short_code`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'short_links' => "CREATE TABLE IF NOT EXISTS `short_links` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `short_code` VARCHAR(50) NOT NULL,
+            `destination_url` TEXT NOT NULL,
+            `clicks` INT UNSIGNED NOT NULL DEFAULT 0,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `short_code` (`short_code`),
+            KEY `idx_sl_deleted_at` (`deleted_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'post_share_links' => "CREATE TABLE IF NOT EXISTS `post_share_links` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `post_id` INT UNSIGNED DEFAULT NULL,
+            `short_code` VARCHAR(50) NOT NULL,
+            `si_code` VARCHAR(16) NOT NULL,
+            `platform` VARCHAR(32) DEFAULT NULL,
+            `visits` INT UNSIGNED NOT NULL DEFAULT 0,
+            `ip_hash` CHAR(64) DEFAULT NULL,
+            `user_agent` VARCHAR(500) DEFAULT NULL,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `last_visit_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_post_share_si` (`si_code`),
+            KEY `idx_psl_short_code` (`short_code`),
+            KEY `idx_psl_post_id` (`post_id`),
+            KEY `idx_psl_created_at` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'api_keys' => "CREATE TABLE IF NOT EXISTS `api_keys` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(100) NOT NULL,
+            `key_prefix` VARCHAR(20) NOT NULL,
+            `key_hash` CHAR(64) NOT NULL,
+            `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+            `last_used_at` TIMESTAMP NULL DEFAULT NULL,
+            `created_by` INT UNSIGNED DEFAULT NULL,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `revoked_at` TIMESTAMP NULL DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_api_keys_hash` (`key_hash`),
+            KEY `idx_api_keys_active` (`is_active`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        'api_logs' => "CREATE TABLE IF NOT EXISTS `api_logs` (
+            `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `api_key_id` INT UNSIGNED DEFAULT NULL,
+            `api_key_name` VARCHAR(100) DEFAULT NULL,
+            `method` VARCHAR(10) NOT NULL,
+            `endpoint` VARCHAR(150) NOT NULL,
+            `resource` VARCHAR(50) NOT NULL,
+            `record_id` VARCHAR(64) DEFAULT NULL,
+            `action_type` ENUM('CREATE','READ','UPDATE','DELETE') NOT NULL,
+            `status_code` SMALLINT UNSIGNED NOT NULL DEFAULT 200,
+            `payload_summary` TEXT DEFAULT NULL,
+            `ip_address` VARCHAR(45) DEFAULT NULL,
+            `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_api_logs_created_at` (`created_at`),
+            KEY `idx_api_logs_action` (`action_type`),
+            KEY `idx_api_logs_resource` (`resource`),
+            KEY `idx_api_logs_key` (`api_key_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    ];
+
+    foreach ($defaultTables as $tbl => $ddl) {
+        if (!isset($existingTables[$tbl])) {
+            try {
+                $db->query($ddl);
+                $added[] = $tbl;
+                $existingTables[$tbl] = true;
+            } catch (Throwable $e) {
+                error_log('[installer-default-table] ' . $tbl . ': ' . $e->getMessage());
+            }
+        }
+    }
+
+    $requiredColumns = [
+        ['news_tracking', 'si_code', 'VARCHAR(16) NULL AFTER `short_code`'],
+        ['news_posts', 'deleted_at', 'TIMESTAMP NULL DEFAULT NULL'],
+        ['news_categories', 'deleted_at', 'TIMESTAMP NULL DEFAULT NULL'],
+        ['news_categories', 'show_in_header', 'TINYINT(1) NOT NULL DEFAULT 1'],
+        ['news_comments', 'deleted_at', 'TIMESTAMP NULL DEFAULT NULL'],
+        ['news_comments', 'parent_id', 'INT DEFAULT NULL'],
+        ['short_links', 'deleted_at', 'TIMESTAMP NULL DEFAULT NULL'],
+        ['9s_custom_banners', 'deleted_at', 'TIMESTAMP NULL DEFAULT NULL'],
+        ['9s_adsense', 'code', 'TEXT NULL'],
+    ];
+
+    foreach ($requiredColumns as [$tbl, $col, $def]) {
+        if (!isset($existingTables[$tbl])) {
+            continue;
+        }
+        try {
+            $qTbl = '`' . str_replace('`', '``', $tbl) . '`';
+            $qCol = str_replace("'", "''", $col);
+            $hasCol = $db->query("SHOW COLUMNS FROM $qTbl LIKE '$qCol'")->fetch_assoc();
+            if (!$hasCol) {
+                $db->query("ALTER TABLE $qTbl ADD COLUMN `$col` $def");
+                $added[] = "$tbl.$col";
+            }
+        } catch (Throwable $e) {
+            error_log('[installer-default-col] ' . $tbl . '.' . $col . ': ' . $e->getMessage());
+        }
+    }
+
+    return $added;
+}
+
 /**
  * Repair integer id columns from the known application backup schema.
  * This runs only after an authenticated installer action, never on normal
@@ -68,10 +350,22 @@ function installer_mark_complete(mysqli $db): void
 function installer_schema_status(mysqli $db): array
 {
     $tables = [
-        '9s_adsense', '9s_custom_banners', '9s_users',
-        'jb_news_sources', 'jb_promo_clicks', 'news_categories', 'news_comments',
-        'news_posts', 'news_shortlinks', 'news_tracking',
-        'settings', 'share_links', 'short_links',
+        '9s_adsense',
+        '9s_custom_banners',
+        '9s_users',
+        'api_keys',
+        'api_logs',
+        'jb_news_sources',
+        'jb_promo_clicks',
+        'news_categories',
+        'news_comments',
+        'news_posts',
+        'news_shortlinks',
+        'news_tracking',
+        'post_share_links',
+        'settings',
+        'share_links',
+        'short_links',
     ];
     $status = [];
     foreach ($tables as $table) {
@@ -120,6 +414,8 @@ function installer_fix_auto_increment_ids(mysqli $db): array
         '9s_adsense',
         '9s_custom_banners',
         '9s_users',
+        'api_keys',
+        'api_logs',
         'jb_news_sources',
         'jb_promo_clicks',
         'news_categories',
@@ -127,6 +423,7 @@ function installer_fix_auto_increment_ids(mysqli $db): array
         'news_posts',
         'news_shortlinks',
         'news_tracking',
+        'post_share_links',
         'settings',
         'share_links',
         'short_links',
@@ -305,7 +602,8 @@ function installer_sql_statements(string $sql): Generator
         $next = $i + 1 < $length ? $sql[$i + 1] : '';
 
         if ($lineComment) {
-            if ($ch === "\n") $lineComment = false;
+            if ($ch === "\n")
+                $lineComment = false;
             continue;
         }
         if ($blockComment) {
@@ -334,19 +632,22 @@ function installer_sql_statements(string $sql): Generator
             $quote = $ch;
         } elseif ($ch === '#' || ($ch === '-' && $next === '-' && ($i + 2 >= $length || ctype_space($sql[$i + 2])))) {
             $lineComment = true;
-            if ($ch === '-') $i++;
+            if ($ch === '-')
+                $i++;
         } elseif ($ch === '/' && $next === '*') {
             $blockComment = true;
             $i++;
         } elseif ($ch === ';') {
             $statement = trim(substr($sql, $start, $i - $start));
-            if ($statement !== '') yield $statement;
+            if ($statement !== '')
+                yield $statement;
             $start = $i + 1;
         }
     }
 
     $statement = trim(substr($sql, $start));
-    if ($statement !== '') yield $statement;
+    if ($statement !== '')
+        yield $statement;
 }
 
 function installer_without_leading_comments(string $statement): string
@@ -367,7 +668,8 @@ function installer_table_ddl(string $statement): ?array
     $sql = installer_without_leading_comments($statement);
     $identifier = '(?:`((?:``|[^`])+)`|([A-Za-z0-9_$]+))';
     $pattern = '/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:' . $identifier . '\s*\.\s*)?' . $identifier . '/i';
-    if (!preg_match($pattern, $sql, $match)) return null;
+    if (!preg_match($pattern, $sql, $match))
+        return null;
 
     $table = str_replace('``', '`', ($match[3] ?? '') !== '' ? $match[3] : ($match[4] ?? ''));
     $ddl = preg_replace('/^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:`(?:``|[^`])+`|[A-Za-z0-9_$]+)\s*\.\s*/i', 'CREATE TABLE IF NOT EXISTS ', $sql, 1, $qualified);
@@ -552,38 +854,49 @@ try {
             throw new RuntimeException('The full restore has already completed. Only protected schema repair is allowed.');
         }
 
-        [$sql, $filename, $collationConversions] = installer_load_sql_source($localFiles);
-
         if ($mode === 'repair') {
-            $existing = [];
-            foreach ($db->query('SHOW TABLES')->fetch_all(MYSQLI_NUM) as $row) $existing[$row[0]] = true;
             $created = [];
-            $db->query('SET FOREIGN_KEY_CHECKS=0');
-            foreach (installer_sql_statements($sql) as $statement) {
-                $tableDdl = installer_table_ddl($statement);
-                if ($tableDdl === null) continue;
-                [$table, $ddl] = $tableDdl;
-                if (isset($existing[$table])) continue;
-                $db->query($ddl);
-                $existing[$table] = true;
-                $created[] = $table;
+            $collationConversions = 0;
+            $hasSqlSource = (($_FILES['backup']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) || (trim((string) ($_POST['local_file'] ?? '')) !== '');
+            if ($hasSqlSource) {
+                [$sql, $filename, $collationConversions] = installer_load_sql_source($localFiles);
+                $existing = [];
+                foreach ($db->query('SHOW TABLES')->fetch_all(MYSQLI_NUM) as $row)
+                    $existing[$row[0]] = true;
+                $db->query('SET FOREIGN_KEY_CHECKS=0');
+                foreach (installer_sql_statements($sql) as $statement) {
+                    $tableDdl = installer_table_ddl($statement);
+                    if ($tableDdl === null)
+                        continue;
+                    [$table, $ddl] = $tableDdl;
+                    if (isset($existing[$table]))
+                        continue;
+                    $db->query($ddl);
+                    $existing[$table] = true;
+                    $created[] = $table;
+                }
+                $db->query('SET FOREIGN_KEY_CHECKS=1');
             }
-            $db->query('SET FOREIGN_KEY_CHECKS=1');
+            $defaultAdded = installer_ensure_default_schema($db);
+            $allCreated = array_values(array_unique(array_merge($created, $defaultAdded)));
             $idRepair = installer_fix_auto_increment_ids($db);
             $bannerSlugRepair = installer_repair_banner_slug($db);
-            $result = $created
-                ? 'Added missing tables: ' . implode(', ', $created) . '. No rows were imported.'
-                : 'No missing tables were found. No rows were imported.';
+            $result = $allCreated
+                ? 'Added missing tables/columns: ' . implode(', ', $allCreated) . '. Existing rows were preserved.'
+                : 'All default tables and columns are present. No rows were modified.';
             $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
-            if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
+            if ($collationConversions > 0)
+                $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } elseif ($mode === 'restore' && ($_POST['confirm_restore'] ?? '') === 'EMPTY AND RESTORE') {
+            [$sql, $filename, $collationConversions] = installer_load_sql_source($localFiles);
             if (in_array(strtolower(DB_NAME), ['mysql', 'information_schema', 'performance_schema', 'sys'], true)) {
                 throw new RuntimeException('Refusing to restore into a MySQL system database. Set DB_NAME to the application database.');
             }
 
             $createCount = 0;
             foreach (installer_sql_statements($sql) as $statement) {
-                if (installer_table_ddl($statement) !== null) $createCount++;
+                if (installer_table_ddl($statement) !== null)
+                    $createCount++;
             }
             if ($createCount === 0) {
                 throw new RuntimeException('The uploaded backup contains no CREATE TABLE statements. Nothing was deleted.');
@@ -601,29 +914,41 @@ try {
             $tables = [];
             foreach ($db->query('SHOW FULL TABLES')->fetch_all(MYSQLI_NUM) as $row) {
                 $identifier = '`' . str_replace('`', '``', (string) $row[0]) . '`';
-                if (strtoupper((string) ($row[1] ?? '')) === 'VIEW') $views[] = $identifier;
-                else $tables[] = $identifier;
+                if (strtoupper((string) ($row[1] ?? '')) === 'VIEW')
+                    $views[] = $identifier;
+                else
+                    $tables[] = $identifier;
             }
-            foreach ($views as $identifier) $db->query('DROP VIEW IF EXISTS ' . $identifier);
-            foreach ($tables as $identifier) $db->query('DROP TABLE IF EXISTS ' . $identifier);
+            foreach ($views as $identifier)
+                $db->query('DROP VIEW IF EXISTS ' . $identifier);
+            foreach ($tables as $identifier)
+                $db->query('DROP TABLE IF EXISTS ' . $identifier);
 
             // Execute statements in ~2 MB multi_query batches to avoid MySQL max_allowed_packet limits.
             $statementCount = installer_execute_sql_dump($db, $sql);
+            $defaultAdded = installer_ensure_default_schema($db);
             $idRepair = installer_fix_auto_increment_ids($db);
             $bannerSlugRepair = installer_repair_banner_slug($db);
             $db->query('SET FOREIGN_KEY_CHECKS=1');
             installer_mark_complete($db);
             $completed = true;
             $result = 'Backup ' . $filename . ' imported successfully (' . $statementCount . ' SQL statements) into database ' . DB_NAME . '. Disable the installer now.';
+            if ($defaultAdded) {
+                $result .= ' Provisioned default tables/columns: ' . implode(', ', $defaultAdded) . '.';
+            }
             $result .= installer_id_repair_message($idRepair) . $bannerSlugRepair;
-            if ($collationConversions > 0) $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
+            if ($collationConversions > 0)
+                $result .= ' Converted ' . $collationConversions . ' MariaDB collation references for MySQL.';
         } else {
             throw new RuntimeException('Choose a valid action. Full restore requires typing EMPTY AND RESTORE.');
         }
     }
 } catch (Throwable $e) {
     if (isset($db) && $db instanceof mysqli) {
-        try { $db->query('SET FOREIGN_KEY_CHECKS=1'); } catch (Throwable $ignored) {}
+        try {
+            $db->query('SET FOREIGN_KEY_CHECKS=1');
+        } catch (Throwable $ignored) {
+        }
     }
     $error = $e->getMessage();
 }
@@ -642,361 +967,758 @@ foreach ($schemaStatus as $item) {
 ?>
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>9sty Database Installer</title>
-  <style>
-    :root{
-      --bg:#0b1120;--surface:#111827;--surface-2:#1e293b;--border:#293548;
-      --text:#f1f5f9;--muted:#94a3b8;--accent:#6366f1;--accent-2:#818cf8;
-      --ok:#10b981;--ok-bg:rgba(16,185,129,.12);
-      --warn:#f59e0b;--warn-bg:rgba(245,158,11,.12);
-      --err:#ef4444;--err-bg:rgba(239,68,68,.12);
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-    .brand{display:flex;align-items:center;gap:12px}
-    .brand-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#3b82f6);display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px;letter-spacing:-.5px}
-    .brand h1{margin:0;font-size:17px;font-weight:700}
-    .brand p{margin:0;font-size:12px;color:var(--muted)}
-    .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface-2)}
-    .pill.ok{color:var(--ok);background:var(--ok-bg);border-color:rgba(16,185,129,.3)}
-    .pill.warn{color:var(--warn);background:var(--warn-bg);border-color:rgba(245,158,11,.3)}
-    .pill.err{color:var(--err);background:var(--err-bg);border-color:rgba(239,68,68,.3)}
-    .container{max-width:1240px;margin:24px auto;padding:0 20px 48px}
-    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
-    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
-    .kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-    .kpi-value{font-size:20px;font-weight:700;margin-top:4px;word-break:break-word}
-    .kpi-sub{font-size:12px;color:var(--muted);margin-top:2px}
-    .alert{padding:14px 16px;border-radius:10px;margin-bottom:16px;border:1px solid;white-space:pre-wrap}
-    .alert.notice{background:var(--warn-bg);border-color:rgba(245,158,11,.35);color:#fde68a}
-    .alert.error{background:var(--err-bg);border-color:rgba(239,68,68,.4);color:#fecaca}
-    .alert.success{background:var(--ok-bg);border-color:rgba(16,185,129,.4);color:#a7f3d0}
-    .grid{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:start}
-    @media (max-width:940px){.grid{grid-template-columns:1fr}}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px}
-    .card-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
-    .card-title{margin:0;font-size:16px;font-weight:700}
-    .card-desc{margin:0 0 14px;color:var(--muted);font-size:13px}
-    label{display:block;font-weight:600;font-size:13px;margin:14px 0 6px;color:#cbd5e1}
-    input[type=password],input[type=text],input:not([type]),select{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit;outline:none}
-    input:focus,select:focus{border-color:var(--accent)}
-    .dropzone{position:relative;border:1.5px dashed #3b4a63;border-radius:10px;padding:18px;text-align:center;background:rgba(15,23,42,.55);transition:border-color .15s,background .15s;cursor:pointer}
-    .dropzone.dragover{border-color:var(--accent-2);background:rgba(99,102,241,.1)}
-    .dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-    .dropzone-title{font-weight:600;color:var(--text)}
-    .dropzone-sub{font-size:12px;color:var(--muted);margin-top:4px}
-    .file-meta{margin-top:10px;font-size:12px;color:var(--accent-2);font-weight:600}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px 16px;border-radius:9px;border:none;font:inherit;font-weight:600;cursor:pointer;margin-top:14px;transition:opacity .15s,transform .05s}
-    .btn:disabled{opacity:.55;cursor:not-allowed}
-    .btn-primary{background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff}
-    .btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff}
-    .progress-card{display:none;background:var(--surface-2);border:1px solid #3b4a63;border-radius:12px;padding:16px;margin-top:16px}
-    .progress-card.active{display:block}
-    .progress-top{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:13px;margin-bottom:8px}
-    .progress-track{height:10px;background:var(--bg);border-radius:999px;overflow:hidden;border:1px solid var(--border)}
-    .progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#6366f1,#38bdf8);transition:width .15s linear}
-    .progress-bar.indeterminate{width:100%;background:linear-gradient(90deg,#6366f1,#10b981,#6366f1);background-size:200% 100%;animation:pulseSlide 1.4s linear infinite}
-    @keyframes pulseSlide{0%{background-position:200% 0}100%{background-position:0 0}}
-    .progress-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
-    .progress-stats strong{display:block;color:var(--text);font-size:13px}
-    .table-wrap{overflow-x:auto}
-    table{width:100%;border-collapse:collapse}
-    th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);font-size:13px}
-    th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-    code{background:var(--bg);padding:2px 6px;border-radius:5px;font-size:12px;color:#c7d2fe}
-    .actions-split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    @media (max-width:640px){.actions-split{grid-template-columns:1fr}}
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>9sty Database Installer</title>
+    <style>
+        :root {
+            --bg: #0b1120;
+            --surface: #111827;
+            --surface-2: #1e293b;
+            --border: #293548;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --accent: #6366f1;
+            --accent-2: #818cf8;
+            --ok: #10b981;
+            --ok-bg: rgba(16, 185, 129, .12);
+            --warn: #f59e0b;
+            --warn-bg: rgba(245, 158, 11, .12);
+            --err: #ef4444;
+            --err-bg: rgba(239, 68, 68, .12);
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font: 14px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text)
+        }
+
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            color: #fff;
+            font-size: 15px;
+            letter-spacing: -.5px
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 700
+        }
+
+        .brand p {
+            margin: 0;
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: var(--surface-2)
+        }
+
+        .pill.ok {
+            color: var(--ok);
+            background: var(--ok-bg);
+            border-color: rgba(16, 185, 129, .3)
+        }
+
+        .pill.warn {
+            color: var(--warn);
+            background: var(--warn-bg);
+            border-color: rgba(245, 158, 11, .3)
+        }
+
+        .pill.err {
+            color: var(--err);
+            background: var(--err-bg);
+            border-color: rgba(239, 68, 68, .3)
+        }
+
+        .container {
+            max-width: 1240px;
+            margin: 24px auto;
+            padding: 0 20px 48px
+        }
+
+        .kpis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+            margin-bottom: 20px
+        }
+
+        .kpi {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        .kpi-value {
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 4px;
+            word-break: break-word
+        }
+
+        .kpi-sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 2px
+        }
+
+        .alert {
+            padding: 14px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            border: 1px solid;
+            white-space: pre-wrap
+        }
+
+        .alert.notice {
+            background: var(--warn-bg);
+            border-color: rgba(245, 158, 11, .35);
+            color: #fde68a
+        }
+
+        .alert.error {
+            background: var(--err-bg);
+            border-color: rgba(239, 68, 68, .4);
+            color: #fecaca
+        }
+
+        .alert.success {
+            background: var(--ok-bg);
+            border-color: rgba(16, 185, 129, .4);
+            color: #a7f3d0
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.05fr .95fr;
+            gap: 20px;
+            align-items: start
+        }
+
+        @media (max-width:940px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 18px
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 14px
+        }
+
+        .card-title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700
+        }
+
+        .card-desc {
+            margin: 0 0 14px;
+            color: var(--muted);
+            font-size: 13px
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            font-size: 13px;
+            margin: 14px 0 6px;
+            color: #cbd5e1
+        }
+
+        input[type=password],
+        input[type=text],
+        input:not([type]),
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font: inherit;
+            outline: none
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--accent)
+        }
+
+        .dropzone {
+            position: relative;
+            border: 1.5px dashed #3b4a63;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
+            background: rgba(15, 23, 42, .55);
+            transition: border-color .15s, background .15s;
+            cursor: pointer
+        }
+
+        .dropzone.dragover {
+            border-color: var(--accent-2);
+            background: rgba(99, 102, 241, .1)
+        }
+
+        .dropzone input[type=file] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%
+        }
+
+        .dropzone-title {
+            font-weight: 600;
+            color: var(--text)
+        }
+
+        .dropzone-sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 4px
+        }
+
+        .file-meta {
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--accent-2);
+            font-weight: 600
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 11px 16px;
+            border-radius: 9px;
+            border: none;
+            font: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 14px;
+            transition: opacity .15s, transform .05s
+        }
+
+        .btn:disabled {
+            opacity: .55;
+            cursor: not-allowed
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: #fff
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: #fff
+        }
+
+        .progress-card {
+            display: none;
+            background: var(--surface-2);
+            border: 1px solid #3b4a63;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px
+        }
+
+        .progress-card.active {
+            display: block
+        }
+
+        .progress-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 13px;
+            margin-bottom: 8px
+        }
+
+        .progress-track {
+            height: 10px;
+            background: var(--bg);
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid var(--border)
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #6366f1, #38bdf8);
+            transition: width .15s linear
+        }
+
+        .progress-bar.indeterminate {
+            width: 100%;
+            background: linear-gradient(90deg, #6366f1, #10b981, #6366f1);
+            background-size: 200% 100%;
+            animation: pulseSlide 1.4s linear infinite
+        }
+
+        @keyframes pulseSlide {
+            0% {
+                background-position: 200% 0
+            }
+
+            100% {
+                background-position: 0 0
+            }
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--muted)
+        }
+
+        .progress-stats strong {
+            display: block;
+            color: var(--text);
+            font-size: 13px
+        }
+
+        .table-wrap {
+            overflow-x: auto
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 9px 10px;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em
+        }
+
+        code {
+            background: var(--bg);
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #c7d2fe
+        }
+
+        .actions-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px
+        }
+
+        @media (max-width:640px) {
+            .actions-split {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
 </head>
+
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-icon">9S</div>
-      <div>
-        <h1>9sty Database Installer</h1>
-        <p>Protected backup restore, chunked SQL import &amp; schema repair</p>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span class="pill">Schema repair v2</span>
-      <span class="pill <?= $completed ? 'ok' : 'warn' ?>"><?= $completed ? 'Restore Locked' : 'Restore Unlocked' ?></span>
-    </div>
-  </header>
-
-  <main class="container">
-    <div class="kpis">
-      <div class="kpi">
-        <div class="kpi-label">Target Database</div>
-        <div class="kpi-value"><?= htmlspecialchars(DB_NAME ?: 'Not set', ENT_QUOTES, 'UTF-8') ?></div>
-        <div class="kpi-sub">Host: <?= htmlspecialchars(DB_HOST, ENT_QUOTES, 'UTF-8') ?>:<?= htmlspecialchars((string) DB_PORT, ENT_QUOTES, 'UTF-8') ?></div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Schema Health</div>
-        <div class="kpi-value"><?= $readyChecks ?> / <?= $totalChecks ?> Ready</div>
-        <div class="kpi-sub"><?= ($totalChecks > 0 && $readyChecks === $totalChecks) ? 'All tracked tables &amp; slug OK' : 'Some tables need repair' ?></div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Local SQL Dumps</div>
-        <div class="kpi-value"><?= count($localFiles) ?> Found</div>
-        <div class="kpi-sub">Supports .sql &amp; .sql.gz</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Upload Limit</div>
-        <div class="kpi-value">100 MB</div>
-        <div class="kpi-sub">2 MB MySQL batch chunks</div>
-      </div>
-    </div>
-
-    <div class="alert notice">Use only while the site is private. A full restore permanently drops every table and view in <strong><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></strong>, then imports the backup. Other databases are not touched.</div>
-    <?php if ($error !== ''): ?><div class="alert error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div><?php endif; ?>
-    <?php if ($result !== ''): ?><div class="alert success"><?= htmlspecialchars($result, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div><?php endif; ?>
-
-    <div class="grid">
-      <div>
-        <form id="installer-form" method="post" enctype="multipart/form-data">
-          <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-
-          <section class="card">
-            <div class="card-header">
-              <h2 class="card-title">1. Credentials &amp; Backup Source</h2>
-              <span class="pill">.sql / .sql.gz</span>
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-icon">9S</div>
+            <div>
+                <h1>9sty Database Installer</h1>
+                <p>Protected backup restore, chunked SQL import &amp; schema repair</p>
             </div>
-            <label for="token">Installer token</label>
-            <input id="token" type="password" name="installer_token" required autocomplete="off" placeholder="Enter INSTALLER_TOKEN">
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span class="pill">Schema repair v2</span>
+            <span
+                class="pill <?= $completed ? 'ok' : 'warn' ?>"><?= $completed ? 'Restore Locked' : 'Restore Unlocked' ?></span>
+        </div>
+    </header>
 
-            <?php if ($localFiles): ?>
-              <label for="local_file">Select a local SQL file (recommended for large dumps)</label>
-              <select id="local_file" name="local_file">
-                <option value="">-- Use uploaded file below --</option>
-                <?php foreach ($localFiles as $key => $info): ?>
-                  <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8') ?></option>
-                <?php endforeach; ?>
-              </select>
-            <?php endif; ?>
+    <main class="container">
+        <div class="kpis">
+            <div class="kpi">
+                <div class="kpi-label">Target Database</div>
+                <div class="kpi-value"><?= htmlspecialchars(DB_NAME ?: 'Not set', ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="kpi-sub">Host:
+                    <?= htmlspecialchars(DB_HOST, ENT_QUOTES, 'UTF-8') ?>:<?= htmlspecialchars((string) DB_PORT, ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Schema Health</div>
+                <div class="kpi-value"><?= $readyChecks ?> / <?= $totalChecks ?> Ready</div>
+                <div class="kpi-sub">
+                    <?= ($totalChecks > 0 && $readyChecks === $totalChecks) ? 'All tracked tables &amp; slug OK' : 'Some tables need repair' ?>
+                </div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Local SQL Dumps</div>
+                <div class="kpi-value"><?= count($localFiles) ?> Found</div>
+                <div class="kpi-sub">Supports .sql &amp; .sql.gz</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Upload Limit</div>
+                <div class="kpi-value">100 MB</div>
+                <div class="kpi-sub">2 MB MySQL batch chunks</div>
+            </div>
+        </div>
 
-            <label for="backup">Or upload SQL backup (max 100 MB)</label>
-            <div class="dropzone" id="dropzone">
-              <input id="backup" type="file" name="backup" accept=".sql,.gz,application/sql,application/gzip" <?= $localFiles ? '' : 'required' ?>>
-              <div class="dropzone-title">Drop your .sql or .sql.gz file here, or click to browse</div>
-              <div class="dropzone-sub">Live upload progress, speed &amp; remaining time will appear below</div>
-              <div class="file-meta" id="file-meta"></div>
+        <div class="alert notice">Use only while the site is private. A full restore permanently drops every table and
+            view in <strong><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></strong>, then imports the backup.
+            Other databases are not touched.</div>
+        <?php if ($error !== ''): ?>
+            <div class="alert error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div>
+        <?php endif; ?>
+        <?php if ($result !== ''): ?>
+            <div class="alert success"><?= htmlspecialchars($result, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div>
+        <?php endif; ?>
+
+        <div class="grid">
+            <div>
+                <form id="installer-form" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf"
+                        value="<?= htmlspecialchars($_SESSION['installer_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+
+                    <section class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">1. Credentials &amp; Backup Source</h2>
+                            <span class="pill">.sql / .sql.gz</span>
+                        </div>
+                        <label for="token">Installer token</label>
+                        <input id="token" type="password" name="installer_token" required autocomplete="off"
+                            placeholder="Enter INSTALLER_TOKEN">
+
+                        <?php if ($localFiles): ?>
+                            <label for="local_file">Select a local SQL file (recommended for large dumps)</label>
+                            <select id="local_file" name="local_file">
+                                <option value="">-- Use uploaded file below --</option>
+                                <?php foreach ($localFiles as $key => $info): ?>
+                                    <option value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($info['label'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+
+                        <label for="backup">Or upload SQL backup (max 100 MB)</label>
+                        <div class="dropzone" id="dropzone">
+                            <input id="backup" type="file" name="backup"
+                                accept=".sql,.gz,application/sql,application/gzip">
+                            <div class="dropzone-title">Drop your .sql or .sql.gz file here, or click to browse</div>
+                            <div class="dropzone-sub">Live upload progress, speed &amp; remaining time will appear below
+                            </div>
+                            <div class="file-meta" id="file-meta"></div>
+                        </div>
+
+                        <div class="progress-card" id="progress-card" aria-live="polite">
+                            <div class="progress-top">
+                                <span id="progress-phase">Uploading backup...</span>
+                                <span id="progress-pct">0%</span>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-bar" id="progress-bar"></div>
+                            </div>
+                            <div class="progress-stats">
+                                <div>Transferred<strong id="progress-bytes">0 MB / 0 MB</strong></div>
+                                <div>Speed<strong id="progress-speed">—</strong></div>
+                                <div>Remaining<strong id="progress-eta">Calculating...</strong></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <?php if ($completed): ?>
+                        <section class="card">
+                            <div class="card-header">
+                                <h2 class="card-title">2. Protected Schema Repair</h2>
+                                <span class="pill ok">Restore Locked</span>
+                            </div>
+                            <p class="card-desc">Full restore is complete and locked. You can still run schema repair to
+                                create missing tables, enable AUTO_INCREMENT IDs, and backfill banner slugs.</p>
+                            <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair missing tables,
+                                all IDs &amp; banner slug</button>
+                        </section>
+                    <?php else: ?>
+                        <div class="actions-split">
+                            <section class="card">
+                                <h2 class="card-title">2a. Repair Schema Only</h2>
+                                <p class="card-desc">Creates missing tables and repairs IDs &amp; banner slugs without
+                                    touching existing rows.</p>
+                                <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair schema &amp;
+                                    IDs</button>
+                            </section>
+
+                            <section class="card">
+                                <h2 class="card-title">2b. Full Database Restore</h2>
+                                <p class="card-desc">Drops all tables/views in
+                                    <code><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></code> and imports the full
+                                    dump.</p>
+                                <label for="confirm">Type <code>EMPTY AND RESTORE</code></label>
+                                <input id="confirm" name="confirm_restore" autocomplete="off"
+                                    placeholder="EMPTY AND RESTORE">
+                                <button class="btn btn-danger" type="submit" name="mode" value="restore">Import full
+                                    backup</button>
+                            </section>
+                        </div>
+                    <?php endif; ?>
+                </form>
             </div>
 
-            <div class="progress-card" id="progress-card" aria-live="polite">
-              <div class="progress-top">
-                <span id="progress-phase">Uploading backup...</span>
-                <span id="progress-pct">0%</span>
-              </div>
-              <div class="progress-track">
-                <div class="progress-bar" id="progress-bar"></div>
-              </div>
-              <div class="progress-stats">
-                <div>Transferred<strong id="progress-bytes">0 MB / 0 MB</strong></div>
-                <div>Speed<strong id="progress-speed">—</strong></div>
-                <div>Remaining<strong id="progress-eta">Calculating...</strong></div>
-              </div>
-            </div>
-          </section>
-
-          <?php if ($completed): ?>
             <section class="card">
-              <div class="card-header">
-                <h2 class="card-title">2. Protected Schema Repair</h2>
-                <span class="pill ok">Restore Locked</span>
-              </div>
-              <p class="card-desc">Full restore is complete and locked. You can still run schema repair to create missing tables, enable AUTO_INCREMENT IDs, and backfill banner slugs.</p>
-              <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair missing tables, all IDs &amp; banner slug</button>
+                <div class="card-header">
+                    <h2 class="card-title">Database Schema Status</h2>
+                    <span
+                        class="pill <?= ($totalChecks > 0 && $readyChecks === $totalChecks) ? 'ok' : 'warn' ?>"><?= $readyChecks ?>/<?= $totalChecks ?>
+                        Ready</span>
+                </div>
+                <p class="card-desc">Live read-only check of the 15 integer ID tables and
+                    <code>9s_custom_banners.slug</code>.</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Table / Column</th>
+                                <th>Definition</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($schemaStatus as $item): ?>
+                                <tr>
+                                    <td><code><?= htmlspecialchars($item['table'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></code>
+                                    </td>
+                                    <td><?= htmlspecialchars($item['type'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
+                                    <td><span
+                                            class="pill <?= $item['ok'] ? 'ok' : 'warn' ?>"><?= $item['ok'] ? 'READY' : 'NEEDS REPAIR' ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </section>
-          <?php else: ?>
-            <div class="actions-split">
-              <section class="card">
-                <h2 class="card-title">2a. Repair Schema Only</h2>
-                <p class="card-desc">Creates missing tables and repairs IDs &amp; banner slugs without touching existing rows.</p>
-                <button class="btn btn-primary" type="submit" name="mode" value="repair">Repair schema &amp; IDs</button>
-              </section>
-
-              <section class="card">
-                <h2 class="card-title">2b. Full Database Restore</h2>
-                <p class="card-desc">Drops all tables/views in <code><?= htmlspecialchars(DB_NAME, ENT_QUOTES, 'UTF-8') ?></code> and imports the full dump.</p>
-                <label for="confirm">Type <code>EMPTY AND RESTORE</code></label>
-                <input id="confirm" name="confirm_restore" autocomplete="off" placeholder="EMPTY AND RESTORE">
-                <button class="btn btn-danger" type="submit" name="mode" value="restore">Import full backup</button>
-              </section>
-            </div>
-          <?php endif; ?>
-        </form>
-      </div>
-
-      <section class="card">
-        <div class="card-header">
-          <h2 class="card-title">Database Schema Status</h2>
-          <span class="pill <?= ($totalChecks > 0 && $readyChecks === $totalChecks) ? 'ok' : 'warn' ?>"><?= $readyChecks ?>/<?= $totalChecks ?> Ready</span>
         </div>
-        <p class="card-desc">Live read-only check of the 15 integer ID tables and <code>9s_custom_banners.slug</code>.</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Table / Column</th><th>Definition</th><th>Status</th></tr></thead>
-            <tbody>
-            <?php foreach ($schemaStatus as $item): ?>
-              <tr>
-                <td><code><?= htmlspecialchars($item['table'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></code></td>
-                <td><?= htmlspecialchars($item['type'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></td>
-                <td><span class="pill <?= $item['ok'] ? 'ok' : 'warn' ?>"><?= $item['ok'] ? 'READY' : 'NEEDS REPAIR' ?></span></td>
-              </tr>
-            <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  </main>
+    </main>
 
-  <script nonce="<?= htmlspecialchars($cspNonce, ENT_QUOTES, 'UTF-8') ?>">
-  (function () {
-    const form = document.getElementById('installer-form');
-    if (!form) return;
+    <script nonce="<?= htmlspecialchars($cspNonce, ENT_QUOTES, 'UTF-8') ?>">
+        (function () {
+            const form = document.getElementById('installer-form');
+            if (!form) return;
 
-    const fileInput = document.getElementById('backup');
-    const dropzone = document.getElementById('dropzone');
-    const fileMeta = document.getElementById('file-meta');
-    const progressCard = document.getElementById('progress-card');
-    const progressPhase = document.getElementById('progress-phase');
-    const progressPct = document.getElementById('progress-pct');
-    const progressBar = document.getElementById('progress-bar');
-    const progressBytes = document.getElementById('progress-bytes');
-    const progressSpeed = document.getElementById('progress-speed');
-    const progressEta = document.getElementById('progress-eta');
+            const fileInput = document.getElementById('backup');
+            const dropzone = document.getElementById('dropzone');
+            const fileMeta = document.getElementById('file-meta');
+            const progressCard = document.getElementById('progress-card');
+            const progressPhase = document.getElementById('progress-phase');
+            const progressPct = document.getElementById('progress-pct');
+            const progressBar = document.getElementById('progress-bar');
+            const progressBytes = document.getElementById('progress-bytes');
+            const progressSpeed = document.getElementById('progress-speed');
+            const progressEta = document.getElementById('progress-eta');
 
-    const fmtBytes = (b) => {
-      if (b < 1024) return b + ' B';
-      if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-      return (b / 1048576).toFixed(2) + ' MB';
-    };
+            const fmtBytes = (b) => {
+                if (b < 1024) return b + ' B';
+                if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+                return (b / 1048576).toFixed(2) + ' MB';
+            };
 
-    const fmtDuration = (sec) => {
-      if (!isFinite(sec) || sec < 0) return 'Calculating...';
-      sec = Math.ceil(sec);
-      if (sec < 60) return sec + 's left';
-      const m = Math.floor(sec / 60);
-      const s = sec % 60;
-      return m + 'm ' + (s < 10 ? '0' : '') + s + 's left';
-    };
+            const fmtDuration = (sec) => {
+                if (!isFinite(sec) || sec < 0) return 'Calculating...';
+                sec = Math.ceil(sec);
+                if (sec < 60) return sec + 's left';
+                const m = Math.floor(sec / 60);
+                const s = sec % 60;
+                return m + 'm ' + (s < 10 ? '0' : '') + s + 's left';
+            };
 
-    const updateFileLabel = () => {
-      if (fileInput && fileInput.files && fileInput.files[0]) {
-        const f = fileInput.files[0];
-        fileMeta.textContent = 'Selected: ' + f.name + ' (' + fmtBytes(f.size) + ')';
-      } else {
-        fileMeta.textContent = '';
-      }
-    };
+            const updateFileLabel = () => {
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    const f = fileInput.files[0];
+                    fileMeta.textContent = 'Selected: ' + f.name + ' (' + fmtBytes(f.size) + ')';
+                } else {
+                    fileMeta.textContent = '';
+                }
+            };
 
-    if (fileInput) {
-      fileInput.addEventListener('change', updateFileLabel);
-    }
-    if (dropzone) {
-      ['dragenter', 'dragover'].forEach((ev) => {
-        dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
-      });
-      ['dragleave', 'drop'].forEach((ev) => {
-        dropzone.addEventListener(ev, () => dropzone.classList.remove('dragover'));
-      });
-    }
+            if (fileInput) {
+                fileInput.addEventListener('change', updateFileLabel);
+            }
+            if (dropzone) {
+                ['dragenter', 'dragover'].forEach((ev) => {
+                    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+                });
+                ['dragleave', 'drop'].forEach((ev) => {
+                    dropzone.addEventListener(ev, () => dropzone.classList.remove('dragover'));
+                });
+            }
 
-    let clickedMode = '';
-    form.querySelectorAll('button[type="submit"][name="mode"]').forEach((btn) => {
-      btn.addEventListener('click', () => { clickedMode = btn.value; });
-    });
+            let clickedMode = '';
+            form.querySelectorAll('button[type="submit"][name="mode"]').forEach((btn) => {
+                btn.addEventListener('click', () => { clickedMode = btn.value; });
+            });
 
-    form.addEventListener('submit', (e) => {
-      if (typeof XMLHttpRequest === 'undefined' || typeof FormData === 'undefined') return;
-      e.preventDefault();
+            form.addEventListener('submit', (e) => {
+                if (typeof XMLHttpRequest === 'undefined' || typeof FormData === 'undefined') return;
+                e.preventDefault();
 
-      const fd = new FormData(form);
-      if (clickedMode) fd.set('mode', clickedMode);
+                const fd = new FormData(form);
+                if (clickedMode) fd.set('mode', clickedMode);
 
-      const hasUpload = fileInput && fileInput.files && fileInput.files.length > 0;
-      const buttons = form.querySelectorAll('button[type="submit"]');
-      buttons.forEach((b) => { b.disabled = true; });
+                const hasUpload = fileInput && fileInput.files && fileInput.files.length > 0;
+                const buttons = form.querySelectorAll('button[type="submit"]');
+                buttons.forEach((b) => { b.disabled = true; });
 
-      progressCard.classList.add('active');
-      progressBar.classList.remove('indeterminate');
-      progressBar.style.width = hasUpload ? '0%' : '100%';
-      progressPct.textContent = hasUpload ? '0%' : '100%';
-      progressPhase.textContent = hasUpload ? 'Uploading SQL backup...' : 'Importing local SQL backup on server...';
-      progressBytes.textContent = hasUpload ? '0 MB / ' + fmtBytes(fileInput.files[0].size) : 'Local file';
-      progressSpeed.textContent = '—';
-      progressEta.textContent = hasUpload ? 'Calculating...' : 'Running...';
+                progressCard.classList.add('active');
+                progressBar.classList.remove('indeterminate');
+                progressBar.style.width = hasUpload ? '0%' : '100%';
+                progressPct.textContent = hasUpload ? '0%' : '100%';
+                progressPhase.textContent = hasUpload ? 'Uploading SQL backup...' : 'Importing local SQL backup on server...';
+                progressBytes.textContent = hasUpload ? '0 MB / ' + fmtBytes(fileInput.files[0].size) : 'Local file';
+                progressSpeed.textContent = '—';
+                progressEta.textContent = hasUpload ? 'Calculating...' : 'Running...';
 
-      const startTime = Date.now();
-      let serverTimer = null;
+                const startTime = Date.now();
+                let serverTimer = null;
 
-      const startServerPhase = () => {
-        if (serverTimer) return;
-        const serverStart = Date.now();
-        progressPhase.textContent = 'Upload complete — Importing & repairing database...';
-        progressPct.textContent = '100%';
-        progressBar.style.width = '100%';
-        progressBar.classList.add('indeterminate');
-        progressEta.textContent = '0s elapsed';
-        serverTimer = setInterval(() => {
-          const elapsed = Math.floor((Date.now() - serverStart) / 1000);
-          progressEta.textContent = elapsed + 's elapsed';
-        }, 1000);
-      };
+                const startServerPhase = () => {
+                    if (serverTimer) return;
+                    const serverStart = Date.now();
+                    progressPhase.textContent = 'Upload complete — Importing & repairing database...';
+                    progressPct.textContent = '100%';
+                    progressBar.style.width = '100%';
+                    progressBar.classList.add('indeterminate');
+                    progressEta.textContent = '0s elapsed';
+                    serverTimer = setInterval(() => {
+                        const elapsed = Math.floor((Date.now() - serverStart) / 1000);
+                        progressEta.textContent = elapsed + 's elapsed';
+                    }, 1000);
+                };
 
-      if (!hasUpload) {
-        startServerPhase();
-      }
+                if (!hasUpload) {
+                    startServerPhase();
+                }
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', window.location.href, true);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', window.location.href, true);
 
-      xhr.upload.addEventListener('progress', (ev) => {
-        if (!ev.lengthComputable || !hasUpload) return;
-        const pct = Math.min(100, Math.round((ev.loaded / ev.total) * 100));
-        const elapsedSec = Math.max(0.1, (Date.now() - startTime) / 1000);
-        const bps = ev.loaded / elapsedSec;
-        const remainingSec = bps > 0 ? (ev.total - ev.loaded) / bps : Infinity;
+                xhr.upload.addEventListener('progress', (ev) => {
+                    if (!ev.lengthComputable || !hasUpload) return;
+                    const pct = Math.min(100, Math.round((ev.loaded / ev.total) * 100));
+                    const elapsedSec = Math.max(0.1, (Date.now() - startTime) / 1000);
+                    const bps = ev.loaded / elapsedSec;
+                    const remainingSec = bps > 0 ? (ev.total - ev.loaded) / bps : Infinity;
 
-        progressBar.style.width = pct + '%';
-        progressPct.textContent = pct + '%';
-        progressBytes.textContent = fmtBytes(ev.loaded) + ' / ' + fmtBytes(ev.total);
-        progressSpeed.textContent = fmtBytes(bps) + '/s';
-        progressEta.textContent = pct >= 100 ? 'Finishing...' : fmtDuration(remainingSec);
+                    progressBar.style.width = pct + '%';
+                    progressPct.textContent = pct + '%';
+                    progressBytes.textContent = fmtBytes(ev.loaded) + ' / ' + fmtBytes(ev.total);
+                    progressSpeed.textContent = fmtBytes(bps) + '/s';
+                    progressEta.textContent = pct >= 100 ? 'Finishing...' : fmtDuration(remainingSec);
 
-        if (ev.loaded >= ev.total) {
-          startServerPhase();
-        }
-      });
+                    if (ev.loaded >= ev.total) {
+                        startServerPhase();
+                    }
+                });
 
-      xhr.addEventListener('load', () => {
-        if (serverTimer) clearInterval(serverTimer);
-        if (xhr.status >= 200 && xhr.status < 500 && xhr.responseText) {
-          document.open();
-          document.write(xhr.responseText);
-          document.close();
-        } else {
-          buttons.forEach((b) => { b.disabled = false; });
-          progressBar.classList.remove('indeterminate');
-          progressPhase.textContent = 'Server returned HTTP ' + xhr.status + ' (import may still be finishing in background — reload to check Schema Status).';
-        }
-      });
+                xhr.addEventListener('load', () => {
+                    if (serverTimer) clearInterval(serverTimer);
+                    if (xhr.status >= 200 && xhr.status < 500 && xhr.responseText) {
+                        document.open();
+                        document.write(xhr.responseText);
+                        document.close();
+                    } else {
+                        buttons.forEach((b) => { b.disabled = false; });
+                        progressBar.classList.remove('indeterminate');
+                        progressPhase.textContent = 'Server returned HTTP ' + xhr.status + ' (import may still be finishing in background — reload to check Schema Status).';
+                    }
+                });
 
-      xhr.addEventListener('error', () => {
-        if (serverTimer) clearInterval(serverTimer);
-        buttons.forEach((b) => { b.disabled = false; });
-        progressBar.classList.remove('indeterminate');
-        progressPhase.textContent = 'Network error or proxy timeout. Reload the page to check Schema Status.';
-      });
+                xhr.addEventListener('error', () => {
+                    if (serverTimer) clearInterval(serverTimer);
+                    buttons.forEach((b) => { b.disabled = false; });
+                    progressBar.classList.remove('indeterminate');
+                    progressPhase.textContent = 'Network error or proxy timeout. Reload the page to check Schema Status.';
+                });
 
-      xhr.send(fd);
-    });
-  })();
-  </script>
+                xhr.send(fd);
+            });
+        })();
+    </script>
 </body>
+
 </html>
